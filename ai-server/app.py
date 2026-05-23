@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify
 import requests
 import json
@@ -12,10 +13,11 @@ app = Flask(__name__)
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 MAIN_MODEL = "qwen2.5:7b"
 
-# 1. 프롬프트 인젝션 방어 모델 로드 (Flask 서버 시작 시 1회만 로드)
-print("🛡️ [보안] Meta Prompt-Guard-86M 로딩 중 (잠시만 기다려주세요)...")
+# 1. 프롬프트 인젝션 방어 모델 로드 (완전 개방형 오픈소스 모델 사용)
+print("🛡️ [보안] ProtectAI 인젝션 방어 모델 로딩 중 (잠시만 기다려주세요)...")
 try:
-    guardrail = pipeline("text-classification", model="meta-llama/Prompt-Guard-86M")
+    # Meta 모델 대신 토큰이 필요 없는 ProtectAI 모델 적용
+    guardrail = pipeline("text-classification", model="protectai/deberta-v3-base-prompt-injection-v2")
     print("✅ [보안] Guardrail 모델 로딩 완료!")
 except Exception as e:
     print(f"❌ [에러] 모델 로딩 실패: {e}")
@@ -45,7 +47,7 @@ def process_ai_request():
         return jsonify({"status": "error", "message": "입력값(input)이 없습니다."}), 400
         
     user_input = data.get('input', '')
-    role = data.get('role', 'user') # 'user'(사용자) 또는 'owner'(사장님)
+    role = data.get('role', 'user')
 
     print(f"\n--- 📥 [요청 수신] 역할: {role} ---")
     print(f"입력값: {user_input}")
@@ -65,8 +67,8 @@ def process_ai_request():
     
     print(f"🔍 [Guardrail 검사] 결과: {label} (확신도: {score:.2f})")
     
-    # Prompt-Guard는 보통 'BENIGN'(정상), 'INJECTION', 'JAILBREAK'를 반환합니다.
-    if label in ['INJECTION', 'JAILBREAK'] and score > 0.5:
+    # ProtectAI 모델은 'SAFE' 또는 'INJECTION'을 반환합니다.
+    if label == 'INJECTION' and score > 0.5:
         print("🚫 [차단] 악성 프롬프트 인젝션/탈옥 감지됨")
         return jsonify({"status": "error", "message": "시스템 탈취 및 비정상적인 지시어가 감지되어 요청이 차단되었습니다."}), 400
 
@@ -97,10 +99,10 @@ def process_ai_request():
     payload = {
         "model": MAIN_MODEL,
         "prompt": isolated_prompt,
-        "format": "json", # JSON 출력 강제 (Ollama 기능)
+        "format": "json", 
         "stream": False,
         "options": {
-            "temperature": 0.7 # 약간의 창의성 허용
+            "temperature": 0.7 
         }
     }
     
@@ -117,10 +119,8 @@ def process_ai_request():
     # ---------------------------------------------------------
     print("🔍 [출력 검증] JSON 파싱 및 유출 검사 중...")
     try:
-        # LLM 응답을 파이썬 딕셔너리로 변환 시도
         parsed_result = json.loads(llm_output)
         
-        # 시스템 지시어가 결과에 그대로 노출되었는지 역추적 방어
         if "동네U의 맛집 추천 AI" in llm_output or "JSON 스키마" in llm_output:
             print("🚫 [차단] 출력물 내 시스템 프롬프트 유출 감지")
             raise ValueError("민감 지시어 유출")
@@ -138,6 +138,5 @@ def process_ai_request():
         return jsonify({"status": "error", "message": "내부 보안 정책에 의해 출력이 차단되었습니다."}), 500
 
 if __name__ == '__main__':
-    # 0.0.0.0으로 열어두면, 같은 와이파이에 연결된 스마트폰(Flutter 앱)에서도 접속 가능합니다.
     print("\n🚀 동네U 통합 AI 보안 서버가 포트 5000에서 시작되었습니다!")
     app.run(host='0.0.0.0', port=5000)
