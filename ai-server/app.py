@@ -15,9 +15,8 @@ MAIN_MODEL = "qwen2.5:7b"
 # 1. 프롬프트 인젝션 방어 모델 로드 (Flask 서버 시작 시 1회만 로드)
 print("🛡️ [보안] Meta Prompt-Guard-86M 로딩 중 (잠시만 기다려주세요)...")
 try:
-    # 로그인이나 토큰이 전혀 필요 없는 ProtectAI의 인젝션 방어 모델로 교체
-    guardrail = pipeline("text-classification", model="ProtectAI/deberta-v3-base-prompt-injection-v2")
-    print("✅ [보안] 대체 Guardrail 모델 로딩 완료!")
+    guardrail = pipeline("text-classification", model="meta-llama/Prompt-Guard-86M")
+    print("✅ [보안] Guardrail 모델 로딩 완료!")
 except Exception as e:
     print(f"❌ [에러] 모델 로딩 실패: {e}")
     exit(1)
@@ -67,8 +66,8 @@ def process_ai_request():
     print(f"🔍 [Guardrail 검사] 결과: {label} (확신도: {score:.2f})")
     
     # Prompt-Guard는 보통 'BENIGN'(정상), 'INJECTION', 'JAILBREAK'를 반환합니다.
-    if label == 'INJECTION' and score > 0.5:
-        print("🚫 [차단] 악성 프롬프트 인젝션 감지됨")
+    if label in ['INJECTION', 'JAILBREAK'] and score > 0.5:
+        print("🚫 [차단] 악성 프롬프트 인젝션/탈옥 감지됨")
         return jsonify({"status": "error", "message": "시스템 탈취 및 비정상적인 지시어가 감지되어 요청이 차단되었습니다."}), 400
 
     # ---------------------------------------------------------
