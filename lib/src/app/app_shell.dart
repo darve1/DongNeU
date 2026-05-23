@@ -277,7 +277,7 @@ class _DongNeuAppState extends State<DongNeuApp> {
     final response = await http
         .post(
           uri,
-          headers: const {'Content-Type': 'application/json'},
+          headers: _jsonHeadersWithAuth(),
           body: jsonEncode({'input': trimmedQuery, 'role': 'user'}),
         )
         .timeout(const Duration(seconds: 35));

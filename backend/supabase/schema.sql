@@ -65,7 +65,7 @@ create table if not exists public.saved_stores (
 
 create table if not exists public.recommendation_history (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid references public.profiles(id) on delete set null,
+  user_id uuid not null references public.profiles(id) on delete cascade,
   query text not null,
   location_text text,
   budget text,
@@ -141,7 +141,7 @@ $$;
 
 create table if not exists public.promotion_history (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid references public.profiles(id) on delete set null,
+  owner_id uuid not null references public.profiles(id) on delete cascade,
   store_id uuid references public.stores(id) on delete set null,
   promotion_type text not null
     check (promotion_type in ('sns', 'description', 'coupon')),
@@ -151,6 +151,68 @@ create table if not exists public.promotion_history (
   generated_copy text not null,
   created_at timestamptz not null default now()
 );
+
+create or replace function public.enforce_promotion_history_limits()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  recent_insert_count integer;
+begin
+  if new.owner_id is null then
+    raise exception 'promotion_history.owner_id is required';
+  end if;
+
+  if auth.uid() is not null and new.owner_id <> auth.uid() then
+    raise exception 'cannot insert promotion history for another owner';
+  end if;
+
+  select count(*)
+  into recent_insert_count
+  from public.promotion_history
+  where owner_id = new.owner_id
+    and created_at >= now() - interval '1 minute';
+
+  if recent_insert_count >= 20 then
+    raise exception 'promotion history rate limit exceeded';
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.prune_promotion_history()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.promotion_history
+  where owner_id = new.owner_id
+    and (
+      created_at < now() - interval '90 days'
+      or id in (
+        select id
+        from (
+          select
+            id,
+            row_number() over (
+              partition by owner_id
+              order by created_at desc, id desc
+            ) as row_num
+          from public.promotion_history
+          where owner_id = new.owner_id
+        ) ranked
+        where row_num > 100
+      )
+    );
+
+  return null;
+end;
+$$;
 
 drop trigger if exists set_profiles_updated_at on public.profiles;
 create trigger set_profiles_updated_at
@@ -178,6 +240,18 @@ on public.recommendation_history;
 create trigger prune_recommendation_history
 after insert on public.recommendation_history
 for each row execute function public.prune_recommendation_history();
+
+drop trigger if exists enforce_promotion_history_limits
+on public.promotion_history;
+create trigger enforce_promotion_history_limits
+before insert on public.promotion_history
+for each row execute function public.enforce_promotion_history_limits();
+
+drop trigger if exists prune_promotion_history
+on public.promotion_history;
+create trigger prune_promotion_history
+after insert on public.promotion_history
+for each row execute function public.prune_promotion_history();
 
 create index if not exists idx_stores_owner_id on public.stores(owner_id);
 create index if not exists idx_stores_category on public.stores(category);
