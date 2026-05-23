@@ -5,8 +5,12 @@ import json
 import re
 from transformers import pipeline
 
+# Supabase 라이브러리 추가
+from supabase import create_client, Client
+
 app = Flask(__name__)
 
+# CORS 설정 (외부 접속 허용)
 @app.after_request
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
@@ -17,13 +21,17 @@ def add_cors_headers(response):
 # =====================================================================
 # [초기화 설정]
 # =====================================================================
+# ⭐️ 여기에 본인의 Supabase 프로젝트 URL과 API 키(anon public)를 입력하세요!
+SUPABASE_URL = "https://본인의-supabase-url.supabase.co"
+SUPABASE_KEY = "본인의-supabase-anon-key"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 MAIN_MODEL = "qwen2.5:7b"
 
-# 1. 프롬프트 인젝션 방어 모델 로드 (완전 개방형 오픈소스 모델 사용)
+# 1. 프롬프트 인젝션 방어 모델 로드
 print("🛡️ [보안] ProtectAI 인젝션 방어 모델 로딩 중 (잠시만 기다려주세요)...")
 try:
-    # Meta 모델 대신 토큰이 필요 없는 ProtectAI 모델 적용
     guardrail = pipeline("text-classification", model="protectai/deberta-v3-base-prompt-injection-v2")
     print("✅ [보안] Guardrail 모델 로딩 완료!")
 except Exception as e:
@@ -44,10 +52,56 @@ def is_heuristic_injection(text):
     return False
 
 # =====================================================================
+# [DB 검색 함수] - Supabase에서 키워드로 식당 찾기
+# =====================================================================
+def search_restaurants(keywords, top_n=10):
+    if not keywords:
+        # 키워드가 없으면 최신순(또는 랜덤)으로 아무거나 가져옴
+        res = supabase.table('stores').select('*').limit(top_n).execute()
+        return res.data
+    
+    all_matched_records = []
+    
+    # 1. 각 키워드별로 DB에 검색 요청 (LIKE 검색)
+    for kw in keywords:
+        query_str = f"음식점명.ilike.%{kw}%,업종정보.ilike.%{kw}%,대표메뉴명.ilike.%{kw}%,메뉴한글명.ilike.%{kw}%"
+        res = supabase.table('stores').select('*').or_(query_str).execute()
+        all_matched_records.extend(res.data)
+        
+    # 2. 중복된 가게 제거 및 매칭 점수(Score) 계산
+    unique_stores = {}
+    for store in all_matched_records:
+        store_id = store.get('음식점아이디') # Supabase 내 Primary Key 컬럼명에 맞게 수정 필요
+        if store_id not in unique_stores:
+            unique_stores[store_id] = store
+            unique_stores[store_id]['score'] = 0
+            
+    if not unique_stores: # 검색된 게 없으면 기본 목록 반환
+        return supabase.table('stores').select('*').limit(top_n).execute().data
+        
+    # 3. 키워드와 가장 많이 겹치는지 점수 계산
+    for store_id, store in unique_stores.items():
+        name = store.get('음식점명') or ''
+        category = store.get('업종정보') or ''
+        main_menu = store.get('대표메뉴명') or ''
+        menu_list = store.get('메뉴한글명') or ''
+        
+        search_text = f"{name} {category} {main_menu} {menu_list}"
+        
+        for kw in keywords:
+            if kw in search_text:
+                store['score'] += 1
+                
+    # 4. 점수가 높은 순으로 정렬해서 상위 N개만 잘라냄
+    sorted_stores = sorted(unique_stores.values(), key=lambda x: x['score'], reverse=True)
+    return sorted_stores[:top_n]
+
+# =====================================================================
 # [API 엔드포인트]
 # =====================================================================
 @app.route('/api/ai', methods=['POST', 'OPTIONS'])
 def process_ai_request():
+    # Preflight 요청 처리
     if request.method == 'OPTIONS':
         return ('', 204)
 
@@ -65,31 +119,73 @@ def process_ai_request():
     # ---------------------------------------------------------
     # 🕵️‍♂️ [1계층] Input Guardrail (사전 검증 층)
     # ---------------------------------------------------------
-    # 1-1. 빠르고 가벼운 정규식 검사
     if is_heuristic_injection(user_input):
         print("🚫 [차단] 휴리스틱 인젝션 패턴 감지됨")
         return jsonify({"status": "error", "message": "허용되지 않는 명령 패턴이 포함되어 있습니다."}), 400
 
-    # 1-2. AI 모델 기반 인젝션/탈옥 검사
     gr_result = guardrail(user_input)[0]
     label = gr_result['label']
     score = gr_result['score']
     
     print(f"🔍 [Guardrail 검사] 결과: {label} (확신도: {score:.2f})")
     
-    # ProtectAI 모델은 'SAFE' 또는 'INJECTION'을 반환합니다.
     if label == 'INJECTION' and score > 0.5:
         print("🚫 [차단] 악성 프롬프트 인젝션/탈옥 감지됨")
         return jsonify({"status": "error", "message": "시스템 탈취 및 비정상적인 지시어가 감지되어 요청이 차단되었습니다."}), 400
 
     # ---------------------------------------------------------
-    # 📦 [2계층] Context Isolation (도메인 샌드박싱)
+    # 📦 [2계층] Context Isolation & 2-Step RAG 적용
     # ---------------------------------------------------------
     if role == 'user':
-        system_prompt = """너는 대전·충청권 로컬마켓 활성화 서비스 '동네U'의 맛집 추천 AI다.
-사용자의 위치, 예산, 상황을 분석하여 가장 알맞은 가게 3곳을 추천해라.
-반드시 아래 JSON 스키마 형식으로만 답변하고, 다른 말은 절대 추가하지 마라.
-{"recommendations": [{"card_type": "가까워U", "store_name": "가게이름", "reason": "추천이유"}, ...]}"""
+        # [Step 1] 사용자 상황에서 검색 키워드 추출 (1차 Ollama 호출)
+        print("⏳ [1단계] 사용자 상황 분석 및 키워드 추출 중...")
+        keyword_prompt = f"""너는 맛집 검색을 위한 키워드 추출기다.
+사용자의 상황을 분석해서 검색에 사용할 핵심 단어(음식 종류, 분위기 등)를 2~4개만 뽑아라.
+반드시 아래 JSON 스키마로만 답변해라.
+{{"keywords": ["키워드1", "키워드2"]}}
+
+<user_input>
+{user_input}
+</user_input>"""
+
+        try:
+            resp_1 = requests.post(OLLAMA_API_URL, json={
+                "model": MAIN_MODEL,
+                "prompt": keyword_prompt,
+                "format": "json",
+                "stream": False,
+                "options": {"temperature": 0.3}
+            }, timeout=30)
+            resp_1.raise_for_status()
+            kw_json = json.loads(resp_1.json().get('response', '{}'))
+            keywords = kw_json.get('keywords', [])
+            print(f"✅ [키워드 추출 완료] {keywords}")
+        except Exception as e:
+            print(f"⚠️ 키워드 추출 실패. 기본 검색으로 대체합니다. 에러: {e}")
+            keywords = []
+
+        # [Step 2] 추출된 키워드로 Supabase DB 검색
+        print("🔍 [2단계] Supabase DB에서 맞춤 맛집 검색 중...")
+        top_restaurants = search_restaurants(keywords, top_n=10)
+        
+        db_context = []
+        for r in top_restaurants:
+            info = f"가게명: {r.get('음식점명', '')} | 카테고리: {r.get('업종정보', '')} | 대표메뉴: {r.get('대표메뉴명', '')} | 메뉴: {r.get('메뉴한글명', '')} | 주소: {r.get('주소', '')}"
+            db_context.append(info)
+        db_context_str = "\n".join(db_context)
+        print(f"✅ [검색 완료] {len(top_restaurants)}개의 후보 식당 발견")
+
+        # [Step 3] 검색된 데이터를 바탕으로 최종 프롬프트 조립
+        system_prompt = f"""너는 대전·충청권 로컬마켓 활성화 서비스 '동네U'의 맛집 추천 AI다.
+사용자의 상황에 깊이 공감해주며, **반드시 아래 제공된 [DB 검색 후보] 안에서만 가장 어울리는 3곳을 골라 추천해라.**
+가상의 식당을 절대 지어내면 안 된다.
+
+[DB 검색 후보]
+{db_context_str}
+
+반드시 아래 JSON 스키마 형식으로만 답변하고, 다른 말은 추가하지 마라.
+{{"recommendations": [{{"card_type": "동네U추천", "store_name": "가게이름", "reason": "사용자 상황에 맞춘 추천 이유 (가게명이나 메뉴를 자연스럽게 언급)"}}]}}"""
+        
         isolated_prompt = f"{system_prompt}\n\n<user_input>\n{user_input}\n</user_input>"
         
     elif role == 'owner':
@@ -103,9 +199,9 @@ def process_ai_request():
         return jsonify({"status": "error", "message": "잘못된 권한(role)입니다."}), 400
 
     # ---------------------------------------------------------
-    # 🧠 [3계층] 메인 LLM 추론 (Ollama 호출)
+    # 🧠 [3계층] 메인 LLM 추론 (Ollama 호출 2)
     # ---------------------------------------------------------
-    print("⏳ [메인 LLM] Ollama 추론 진행 중...")
+    print("⏳ [메인 LLM] 최종 응답 생성 중...")
     payload = {
         "model": MAIN_MODEL,
         "prompt": isolated_prompt,
@@ -117,7 +213,7 @@ def process_ai_request():
     }
     
     try:
-        response = requests.post(OLLAMA_API_URL, json=payload, timeout=30)
+        response = requests.post(OLLAMA_API_URL, json=payload, timeout=45)
         response.raise_for_status()
         llm_output = response.json().get('response', '')
     except requests.exceptions.RequestException as e:
@@ -131,7 +227,7 @@ def process_ai_request():
     try:
         parsed_result = json.loads(llm_output)
         
-        if "동네U의 맛집 추천 AI" in llm_output or "JSON 스키마" in llm_output:
+        if "동네U의 맛집 추천 AI" in llm_output or "DB 검색 후보" in llm_output or "JSON 스키마" in llm_output:
             print("🚫 [차단] 출력물 내 시스템 프롬프트 유출 감지")
             raise ValueError("민감 지시어 유출")
             
