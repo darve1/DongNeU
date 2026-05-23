@@ -25,6 +25,12 @@ Supabase Dashboard의 SQL Editor에서 아래 순서대로 실행합니다.
 - `recommendation_history`: Flask 사용자 추천 요청과 응답 기록
 - `promotion_history`: Flask 사장님 홍보 문구 생성 기록
 
+## 추천 기록 보호 정책
+
+`recommendation_history`는 DB trigger로 사용자당 분당 20개까지만 insert를 허용합니다.
+새 기록이 저장될 때마다 같은 사용자의 기록은 최신 100개 중 최근 90일 이내 기록만 남기고 정리됩니다.
+RLS 정책은 로그인한 사용자가 자신의 `user_id`로만 추천 기록을 insert할 수 있게 제한합니다.
+
 Flutter 앱은 `SUPABASE_URL`, `SUPABASE_ANON_KEY`를 `--dart-define`으로 받아 anon client로 접근합니다.
 Flask AI 서버는 현재 DB write를 하지 않고, Flutter 앱이 Flask 응답을 Supabase에 저장합니다.
 

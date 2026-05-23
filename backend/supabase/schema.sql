@@ -77,6 +77,68 @@ create table if not exists public.recommendation_history (
   created_at timestamptz not null default now()
 );
 
+create or replace function public.enforce_recommendation_history_limits()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  recent_insert_count integer;
+begin
+  if new.user_id is null then
+    raise exception 'recommendation_history.user_id is required';
+  end if;
+
+  if auth.uid() is not null and new.user_id <> auth.uid() then
+    raise exception 'cannot insert recommendation history for another user';
+  end if;
+
+  select count(*)
+  into recent_insert_count
+  from public.recommendation_history
+  where user_id = new.user_id
+    and created_at >= now() - interval '1 minute';
+
+  if recent_insert_count >= 20 then
+    raise exception 'recommendation history rate limit exceeded';
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.prune_recommendation_history()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.recommendation_history
+  where user_id = new.user_id
+    and (
+      created_at < now() - interval '90 days'
+      or id in (
+        select id
+        from (
+          select
+            id,
+            row_number() over (
+              partition by user_id
+              order by created_at desc, id desc
+            ) as row_num
+          from public.recommendation_history
+          where user_id = new.user_id
+        ) ranked
+        where row_num > 100
+      )
+    );
+
+  return null;
+end;
+$$;
+
 create table if not exists public.promotion_history (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid references public.profiles(id) on delete set null,
@@ -104,6 +166,18 @@ drop trigger if exists set_menu_items_updated_at on public.menu_items;
 create trigger set_menu_items_updated_at
 before update on public.menu_items
 for each row execute function public.set_updated_at();
+
+drop trigger if exists enforce_recommendation_history_limits
+on public.recommendation_history;
+create trigger enforce_recommendation_history_limits
+before insert on public.recommendation_history
+for each row execute function public.enforce_recommendation_history_limits();
+
+drop trigger if exists prune_recommendation_history
+on public.recommendation_history;
+create trigger prune_recommendation_history
+after insert on public.recommendation_history
+for each row execute function public.prune_recommendation_history();
 
 create index if not exists idx_stores_owner_id on public.stores(owner_id);
 create index if not exists idx_stores_category on public.stores(category);

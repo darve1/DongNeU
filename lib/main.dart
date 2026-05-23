@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -205,6 +207,9 @@ class _MenuDraft {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb) {
+    await NaverMapSdk.instance.initialize(clientId: 'j13ue7xko4');
+  }
   if (_isSupabaseConfigured) {
     await Supabase.initialize(url: _supabaseUrl, anonKey: _supabaseAnonKey);
   }
@@ -238,6 +243,9 @@ enum AppScreen {
   saved,
   ownerRegistration,
   promotion,
+  ownerDashboard,
+  ownerMyPage,
+  ownerStoreManage,
   mypage,
 }
 
@@ -563,9 +571,7 @@ class _DongNeuAppState extends State<DongNeuApp> {
   }
 
   AppScreen _screenForRole(String role) {
-    return role == _ownerRole
-        ? AppScreen.ownerRegistration
-        : AppScreen.location;
+    return role == _ownerRole ? AppScreen.ownerDashboard : AppScreen.location;
   }
 
   Future<Map<String, dynamic>?> _loadProfile(String userId) async {
@@ -883,6 +889,13 @@ class _AppRouter extends StatelessWidget {
         onOpen: onOpen,
       ),
       AppScreen.promotion => AiPromotionHelperScreen(onOpen: onOpen),
+      AppScreen.ownerDashboard => OwnerDashboardScreen(onOpen: onOpen),
+      AppScreen.ownerStoreManage => OwnerStoreManageScreen(onOpen: onOpen),
+      AppScreen.ownerMyPage => OwnerMyPageScreen(
+        onOpen: onOpen,
+        onSignOut: onSignOut,
+        userEmail: userEmail,
+      ),
       AppScreen.mypage => MyPageScreen(
         onOpen: onOpen,
         onSignOut: onSignOut,
@@ -1456,6 +1469,47 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
+class _OwnerBottomNav extends StatelessWidget {
+  const _OwnerBottomNav({required this.current, required this.onOpen});
+  final AppScreen current;
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 80,
+      decoration: const BoxDecoration(
+        color: _surface,
+        border: Border(top: BorderSide(color: _alternate)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _NavItem(
+            icon: Icons.dashboard_rounded,
+            label: '현황',
+            selected: current == AppScreen.ownerDashboard,
+            onTap: () => onOpen(AppScreen.ownerDashboard),
+          ),
+          _NavItem(
+            icon: Icons.auto_awesome_rounded,
+            label: 'AI홍보',
+            selected: current == AppScreen.promotion,
+            onTap: () => onOpen(AppScreen.promotion),
+          ),
+          _NavItem(
+            icon: Icons.person_rounded,
+            label: '마이',
+            selected: current == AppScreen.ownerMyPage,
+            onTap: () => onOpen(AppScreen.ownerMyPage),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
@@ -1848,8 +1902,8 @@ class _UserTypeSelectionScreenState extends State<UserTypeSelectionScreen> {
               child: TextButton(
                 onPressed: _isSaving
                     ? null
-                    : () => widget.onOpen(AppScreen.promotion),
-                child: const Text('도움이 필요하신가요?  문의하기'),
+                    : () => widget.onOpen(AppScreen.ownerDashboard),
+                child: const Text('이미 가게를 등록했다면 대시보드로 이동'),
               ),
             ),
           ],
@@ -2067,6 +2121,7 @@ class _LocationSetupScreenState extends State<LocationSetupScreen> {
               },
             ),
           ),
+          _OwnerBottomNav(current: AppScreen.promotion, onOpen: widget.onOpen),
         ],
       ),
     );
@@ -4043,7 +4098,8 @@ class _SavedHistoryScreenState extends State<SavedHistoryScreen> {
         Supabase.instance.client
             .from('recommendation_history')
             .select('id, query, created_at, ai_response')
-            .order('created_at', ascending: false),
+            .order('created_at', ascending: false)
+            .limit(100),
       ]);
 
       if (!mounted) return;
@@ -5346,6 +5402,554 @@ class _FeatureCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class OwnerDashboardScreen extends StatefulWidget {
+  const OwnerDashboardScreen({super.key, required this.onOpen});
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  State<OwnerDashboardScreen> createState() => _OwnerDashboardScreenState();
+}
+
+class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
+  List<DongNeuStore> _stores = const [];
+  List<Map<String, dynamic>> _promotionHistory = const [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboard();
+  }
+
+  Future<void> _loadDashboard() async {
+    if (!_isSupabaseConfigured ||
+        Supabase.instance.client.auth.currentSession == null) {
+      setState(() {
+        _isLoading = false;
+        _error = '로그인 후 사장님 대시보드를 확인할 수 있어요.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final responses = await Future.wait([
+        Supabase.instance.client
+            .from('stores')
+            .select(_storeSelectColumns)
+            .order('created_at', ascending: false),
+        Supabase.instance.client
+            .from('promotion_history')
+            .select('id, generated_copy, created_at')
+            .order('created_at', ascending: false)
+            .limit(5),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _stores = (responses[0] as List)
+            .whereType<Map>()
+            .map(
+              (item) =>
+                  DongNeuStore.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .where((store) => store.id.isNotEmpty)
+            .toList(growable: false);
+        _promotionHistory = (responses[1] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false);
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = '대시보드 데이터를 불러오지 못했어요: $error';
+      });
+    }
+  }
+
+  int get _reviewCount {
+    return _stores.fold<int>(0, (total, store) => total + store.reviewCount);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _PhoneFrame(
+      child: Column(
+        children: [
+          Expanded(
+            child: RefreshIndicator(
+              color: _primary,
+              onRefresh: _loadDashboard,
+              child: ListView(
+                padding: const EdgeInsets.all(24),
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '사장님 대시보드',
+                          style: theme.textTheme.headlineMedium,
+                        ),
+                      ),
+                      _IconButton(
+                        icon: Icons.refresh_rounded,
+                        onPressed: _loadDashboard,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  if (_isLoading)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(28),
+                        child: CircularProgressIndicator(color: _primary),
+                      ),
+                    )
+                  else if (_error != null)
+                    _EmptyStateCard(
+                      icon: Icons.lock_outline_rounded,
+                      title: '대시보드를 열 수 없어요',
+                      message: _error!,
+                      actionLabel: '계정 유형 선택',
+                      onAction: () => widget.onOpen(AppScreen.userType),
+                    )
+                  else ...[
+                    _SurfaceCard(
+                      color: _primary.withOpacity(0.08),
+                      child: Row(
+                        children: [
+                          _ExpandedStat(label: '등록 가게', value: '${_stores.length}'),
+                          _ExpandedStat(label: '리뷰', value: '$_reviewCount'),
+                          _ExpandedStat(
+                            label: 'AI 홍보',
+                            value: '${_promotionHistory.length}',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const _SectionHeader(title: '빠른 메뉴'),
+                    const SizedBox(height: 12),
+                    _MenuTile(
+                      icon: Icons.add_business_rounded,
+                      label: '새 가게 등록',
+                      onTap: () => widget.onOpen(AppScreen.ownerRegistration),
+                    ),
+                    _MenuTile(
+                      icon: Icons.edit_rounded,
+                      label: '가게 정보 및 메뉴 관리',
+                      onTap: () => widget.onOpen(AppScreen.ownerStoreManage),
+                    ),
+                    _MenuTile(
+                      icon: Icons.campaign_rounded,
+                      label: 'AI 홍보 문구 만들기',
+                      onTap: () => widget.onOpen(AppScreen.promotion),
+                    ),
+                    const SizedBox(height: 24),
+                    const _SectionHeader(title: '내 가게'),
+                    const SizedBox(height: 12),
+                    if (_stores.isEmpty)
+                      _EmptyStateCard(
+                        icon: Icons.storefront_rounded,
+                        title: '등록된 가게가 없어요',
+                        message: '가게를 등록하면 AI 추천과 홍보 도우미에 연결됩니다.',
+                        actionLabel: '가게 등록하기',
+                        onAction: () =>
+                            widget.onOpen(AppScreen.ownerRegistration),
+                      )
+                    else
+                      ..._stores.take(3).map((store) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _SurfaceCard(
+                            padding: const EdgeInsets.all(16),
+                            onTap: () =>
+                                widget.onOpen(AppScreen.ownerStoreManage),
+                            child: Row(
+                              children: [
+                                const _IconTile(
+                                  icon: Icons.restaurant_rounded,
+                                  color: _secondary,
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        store.name,
+                                        style: theme.textTheme.titleSmall,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${store.category} · ${store.address}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.bodySmall,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: _accentText,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          _OwnerBottomNav(current: AppScreen.ownerDashboard, onOpen: widget.onOpen),
+        ],
+      ),
+    );
+  }
+}
+
+class OwnerStoreManageScreen extends StatefulWidget {
+  const OwnerStoreManageScreen({super.key, required this.onOpen});
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  State<OwnerStoreManageScreen> createState() => _OwnerStoreManageScreenState();
+}
+
+class _OwnerStoreManageScreenState extends State<OwnerStoreManageScreen> {
+  List<DongNeuStore> _stores = const [];
+  List<StoreMenuItem> _menus = const [];
+  String? _selectedStoreId;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStores();
+  }
+
+  DongNeuStore? get _selectedStore {
+    for (final store in _stores) {
+      if (store.id == _selectedStoreId) return store;
+    }
+    return _stores.isEmpty ? null : _stores.first;
+  }
+
+  Future<void> _loadStores() async {
+    if (!_isSupabaseConfigured ||
+        Supabase.instance.client.auth.currentSession == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final response = await Supabase.instance.client
+          .from('stores')
+          .select(_storeSelectColumns)
+          .order('created_at', ascending: false);
+      if (!mounted) return;
+      final stores = (response as List)
+          .whereType<Map>()
+          .map((item) => DongNeuStore.fromJson(Map<String, dynamic>.from(item)))
+          .where((store) => store.id.isNotEmpty)
+          .toList(growable: false);
+      setState(() {
+        _stores = stores;
+        _selectedStoreId = _selectedStoreId ?? stores.firstOrNull?.id;
+        _isLoading = false;
+      });
+      await _loadMenus();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('가게 정보를 불러오지 못했어요: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadMenus() async {
+    final store = _selectedStore;
+    if (store == null || !_isSupabaseConfigured) {
+      if (mounted) setState(() => _menus = const []);
+      return;
+    }
+
+    final response = await Supabase.instance.client
+        .from('menu_items')
+        .select('id, name, description, price, is_representative')
+        .eq('store_id', store.id)
+        .order('is_representative', ascending: false)
+        .order('created_at', ascending: true);
+    if (!mounted) return;
+    setState(() {
+      _menus = (response as List)
+          .whereType<Map>()
+          .map(
+            (item) => StoreMenuItem.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList(growable: false);
+    });
+  }
+
+  void _showPendingMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('수정 저장은 다음 단계에서 연결할 예정입니다.'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final store = _selectedStore;
+    return _PhoneFrame(
+      child: Column(
+        children: [
+          _TopBar(
+            title: '가게 관리',
+            onBack: () => widget.onOpen(AppScreen.ownerDashboard),
+            trailing: _IconButton(
+              icon: Icons.refresh_rounded,
+              onPressed: _loadStores,
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                if (_isLoading)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(28),
+                      child: CircularProgressIndicator(color: _primary),
+                    ),
+                  )
+                else if (_stores.isEmpty)
+                  _EmptyStateCard(
+                    icon: Icons.storefront_rounded,
+                    title: '관리할 가게가 없어요',
+                    message: '가게를 먼저 등록하면 메뉴와 상태를 확인할 수 있어요.',
+                    actionLabel: '가게 등록하기',
+                    onAction: () =>
+                        widget.onOpen(AppScreen.ownerRegistration),
+                  )
+                else ...[
+                  DropdownButtonFormField<String>(
+                    value: store?.id,
+                    decoration: const InputDecoration(
+                      labelText: '관리할 가게',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _stores
+                        .map(
+                          (store) => DropdownMenuItem(
+                            value: store.id,
+                            child: Text(store.name),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) async {
+                      if (value == null) return;
+                      setState(() => _selectedStoreId = value);
+                      await _loadMenus();
+                    },
+                  ),
+                  const SizedBox(height: 18),
+                  if (store != null)
+                    _SurfaceCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(store.name, style: theme.textTheme.titleLarge),
+                          const SizedBox(height: 6),
+                          Text(store.category, style: theme.textTheme.bodySmall),
+                          const SizedBox(height: 12),
+                          Text(store.address, style: theme.textTheme.bodyMedium),
+                          if (store.description?.isNotEmpty == true) ...[
+                            const SizedBox(height: 10),
+                            Text(
+                              store.description!,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+                  SwitchListTile(
+                    value: true,
+                    onChanged: (_) => _showPendingMessage(),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('영업 중'),
+                    subtitle: const Text('영업 상태 변경 저장은 추후 연결 예정'),
+                  ),
+                  const SizedBox(height: 18),
+                  const _SectionHeader(title: '메뉴'),
+                  const SizedBox(height: 12),
+                  if (_menus.isEmpty)
+                    _SurfaceCard(
+                      color: _surfaceVariant.withOpacity(0.50),
+                      child: Text(
+                        '등록된 메뉴가 없어요.',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    )
+                  else
+                    ..._menus.map((menu) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _SurfaceCard(
+                          padding: const EdgeInsets.all(16),
+                          onTap: _showPendingMessage,
+                          child: Row(
+                            children: [
+                              _IconTile(
+                                icon: menu.isRepresentative
+                                    ? Icons.star_rounded
+                                    : Icons.restaurant_menu_rounded,
+                                color: menu.isRepresentative
+                                    ? _tertiary
+                                    : _primary,
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      menu.name,
+                                      style: theme.textTheme.titleSmall,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _formatWon(menu.price),
+                                      style: theme.textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.edit_rounded,
+                                color: _accentText,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                ],
+              ],
+            ),
+          ),
+          _OwnerBottomNav(
+            current: AppScreen.ownerStoreManage,
+            onOpen: widget.onOpen,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class OwnerMyPageScreen extends StatelessWidget {
+  const OwnerMyPageScreen({
+    super.key,
+    required this.onOpen,
+    required this.onSignOut,
+    required this.userEmail,
+  });
+  final ValueChanged<AppScreen> onOpen;
+  final Future<void> Function() onSignOut;
+  final String? userEmail;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _PhoneFrame(
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                const Center(
+                  child: _IconTile(
+                    icon: Icons.storefront_rounded,
+                    color: _secondary,
+                    size: 88,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '사장님 계정',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  userEmail ?? '로그인 정보 없음',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 32),
+                _MenuTile(
+                  icon: Icons.dashboard_rounded,
+                  label: '대시보드 보기',
+                  onTap: () => onOpen(AppScreen.ownerDashboard),
+                ),
+                _MenuTile(
+                  icon: Icons.edit_rounded,
+                  label: '가게 정보 관리',
+                  onTap: () => onOpen(AppScreen.ownerStoreManage),
+                ),
+                _MenuTile(
+                  icon: Icons.settings_rounded,
+                  label: '설정',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('설정 화면은 다음 단계에서 연결할 예정입니다.'),
+                        behavior: SnackBarBehavior.floating,
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 28),
+                _PrimaryButton(
+                  label: '로그아웃',
+                  outline: true,
+                  onPressed: onSignOut,
+                ),
+              ],
+            ),
+          ),
+          _OwnerBottomNav(current: AppScreen.ownerMyPage, onOpen: onOpen),
+        ],
       ),
     );
   }
