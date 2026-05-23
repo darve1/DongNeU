@@ -139,7 +139,7 @@ on public.recommendation_history;
 create policy "recommendation_history_insert_own"
 on public.recommendation_history
 for insert
-with check (auth.uid() = user_id or user_id is null);
+with check (auth.uid() = user_id);
 
 drop policy if exists "promotion_history_select_own"
 on public.promotion_history;
