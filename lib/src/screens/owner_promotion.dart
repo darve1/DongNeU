@@ -16,6 +16,7 @@ class _AiPromotionHelperScreenState extends State<AiPromotionHelperScreen> {
   List<Map<String, dynamic>> _promotionHistory = const [];
   String? _selectedStoreId;
   String _selectedTone = '친절한';
+  String _selectedPromotionType = 'sns';
   String? _generatedCopy;
   bool _isLoading = true;
   bool _isGenerating = false;
@@ -137,7 +138,7 @@ class _AiPromotionHelperScreenState extends State<AiPromotionHelperScreen> {
 
       final response = await http
           .post(
-            Uri.parse('$AppConfig.flaskAiBaseUrl/api/ai'),
+            Uri.parse('${AppConfig.flaskAiBaseUrl}/api/ai'),
             headers: _jsonHeadersWithAuth(),
             body: jsonEncode({'input': input, 'role': 'owner'}),
           )
@@ -189,6 +190,76 @@ class _AiPromotionHelperScreenState extends State<AiPromotionHelperScreen> {
       setState(() => _generatedCopy = generatedCopy);
       _showMessage('홍보 문구를 생성하고 기록에 저장했어요.');
       await _loadOwnerData();
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
+  }
+
+  Future<void> _generateTimeDeal() async {
+    if (_isGenerating) return;
+    final session = Supabase.instance.client.auth.currentSession;
+    final store = _selectedStore;
+
+    if (!AppConfig.isSupabaseConfigured || session == null) {
+      _showMessage('로그인 후 사용할 수 있어요.');
+      return;
+    }
+    if (store == null) {
+      _showMessage('먼저 사장님 계정으로 가게를 등록해주세요.');
+      return;
+    }
+    if (_eventController.text.trim().isEmpty) {
+      _showMessage('현재 가게의 고민이나 타임딜 상황(예: 오후 3시 손님 없음)을 적어주세요.');
+      return;
+    }
+
+    setState(() => _isGenerating = true);
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${AppConfig.flaskAiBaseUrl}/api/timedeal'),
+            headers: _jsonHeadersWithAuth(),
+            body: jsonEncode({
+              'store_name': store.name,
+              'store_category': store.category,
+              'address': store.address,
+              'signature_menus': store.description ?? '대표메뉴',
+              'special_note': _eventController.text.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
+      
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is! Map<String, dynamic>) throw Exception('AI 서버 응답 형식이 올바르지 않아요.');
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(decoded['message'] as String? ?? 'AI 요청에 실패했어요.');
+      }
+      if (decoded['status'] != 'success') {
+        throw Exception(decoded['message'] as String? ?? '타임딜 생성에 실패했어요.');
+      }
+
+      final data = decoded['data'] as Map<String, dynamic>?;
+      final coupons = data?['coupons'] as List?;
+      if (coupons == null || coupons.isEmpty) {
+        throw Exception('생성된 타임딜 쿠폰이 없어요.');
+      }
+
+      final buffer = StringBuffer();
+      for (var i = 0; i < coupons.length; i++) {
+        final c = coupons[i] as Map<String, dynamic>;
+        buffer.writeln('🎯 타임딜 ${i + 1}');
+        buffer.writeln('이름: ${c['coupon_title']}');
+        buffer.writeln('할인: ${c['discount_type']}');
+        buffer.writeln('타겟: ${c['target_audience']}');
+        buffer.writeln('문구: ${c['marketing_text']}\n');
+      }
+
+      if (!mounted) return;
+      setState(() => _generatedCopy = buffer.toString().trim());
+      _showMessage('타임딜 쿠폰을 성공적으로 기획했습니다.');
     } catch (error) {
       if (!mounted) return;
       _showMessage(error.toString().replaceFirst('Exception: ', ''));
@@ -269,20 +340,17 @@ class _AiPromotionHelperScreenState extends State<AiPromotionHelperScreen> {
                       ? '생성 기록 없음'
                       : '최근 생성: ${_formatDate(_promotionHistory.first['created_at'] as String?)}',
                   action: '작성하기',
+                  selected: _selectedPromotionType == 'sns',
+                  onTap: () => setState(() => _selectedPromotionType = 'sns'),
                 ),
-                const _FeatureCard(
-                  icon: Icons.description_rounded,
-                  title: '메뉴/가게 소개',
-                  subtitle: '손님들의 침샘을 자극하는 설명글',
-                  status: '미작성',
-                  action: '생성하기',
-                ),
-                const _FeatureCard(
+                _FeatureCard(
                   icon: Icons.local_offer_rounded,
                   title: '타임딜 쿠폰',
                   subtitle: '조용한 시간대 손님 모시는 문구',
-                  status: '최근 생성: 1시간 전',
+                  status: '가게 정보 기반 생성',
                   action: '만들기',
+                  selected: _selectedPromotionType == 'timedeal',
+                  onTap: () => setState(() => _selectedPromotionType = 'timedeal'),
                 ),
                 const SizedBox(height: 24),
                 _SurfaceCard(
@@ -330,18 +398,19 @@ class _AiPromotionHelperScreenState extends State<AiPromotionHelperScreen> {
                         ),
                       const SizedBox(height: 16),
                       _TextFieldBox(
-                        label: '홍보할 메뉴/이벤트',
-                        hint: '예: 신메뉴 들기름 막국수 출시',
+                        label: _selectedPromotionType == 'timedeal' ? '현재 상황/고민' : '홍보할 메뉴/이벤트',
+                        hint: _selectedPromotionType == 'timedeal' ? '예: 오후 3시 손님 없음, 비오는 날' : '예: 신메뉴 들기름 막국수 출시',
                         icon: Icons.restaurant_menu_rounded,
                         controller: _eventController,
                       ),
                       const SizedBox(height: 16),
-                      _TextFieldBox(
-                        label: '강조하고 싶은 키워드',
-                        hint: '쉼표로 구분: 고소함, 로컬 식재료, 할머니 손맛',
-                        icon: Icons.sell_rounded,
-                        controller: _keywordsController,
-                      ),
+                      if (_selectedPromotionType == 'sns')
+                        _TextFieldBox(
+                          label: '강조하고 싶은 키워드',
+                          hint: '쉼표로 구분: 고소함, 로컬 식재료, 할머니 손맛',
+                          icon: Icons.sell_rounded,
+                          controller: _keywordsController,
+                        ),
                     ],
                   ),
                 ),
@@ -363,9 +432,13 @@ class _AiPromotionHelperScreenState extends State<AiPromotionHelperScreen> {
                 ),
                 const SizedBox(height: 18),
                 _PrimaryButton(
-                  label: _isGenerating ? '생성 중...' : '문구 생성하기',
+                  label: _isGenerating 
+                      ? '생성 중...' 
+                      : (_selectedPromotionType == 'timedeal' ? '타임딜 쿠폰 기획하기' : '문구 생성하기'),
                   icon: Icons.auto_awesome_rounded,
-                  onPressed: _isGenerating ? () {} : _generatePromotionCopy,
+                  onPressed: _isGenerating 
+                      ? () {} 
+                      : (_selectedPromotionType == 'timedeal' ? _generateTimeDeal : _generatePromotionCopy),
                 ),
                 const SizedBox(height: 16),
                 if (_generatedCopy?.isNotEmpty == true) ...[
@@ -453,17 +526,23 @@ class _FeatureCard extends StatelessWidget {
     required this.subtitle,
     required this.status,
     required this.action,
+    this.selected = false,
+    this.onTap,
   });
   final IconData icon;
   final String title;
   final String subtitle;
   final String status;
   final String action;
+  final bool selected;
+  final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: _SurfaceCard(
+        onTap: onTap,
+        color: selected ? _primary.withOpacity(0.08) : _surface,
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [

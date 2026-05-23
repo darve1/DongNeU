@@ -464,36 +464,46 @@ class _LocationSetupScreenState extends State<LocationSetupScreen> {
                 Container(
                   height: 220,
                   decoration: BoxDecoration(
-                    color: _surfaceVariant,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(color: _alternate),
                   ),
+                  clipBehavior: Clip.hardEdge, // 지도가 모서리를 넘어가지 않게 자름
                   child: Stack(
                     children: [
-                      Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.location_on_rounded,
-                              color: _primary,
-                              size: 48,
+                      if (kIsWeb)
+                        Container(
+                          color: _surfaceVariant,
+                          child: const Center(
+                            child: Text(
+                              '웹 환경에서는\n네이버 지도를 지원하지 않습니다.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: _secondaryText),
                             ),
-                            const SizedBox(height: 8),
-                            const Text('주변 동네를 선택해주세요'),
-                          ],
+                          ),
+                        )
+                      else
+                        NaverMap(
+                          options: const NaverMapViewOptions(
+                            initialCameraPosition: NCameraPosition(
+                              target: NLatLng(36.3665, 127.3445), // 충남대 궁동 좌표
+                              zoom: 14,
+                            ),
+                            indoorEnable: true,
+                            locationButtonEnable: false, // 커스텀 버튼 사용을 위해 기본 버튼 끔
+                            consumeSymbolTapEvents: false,
+                          ),
+                          onMapReady: (controller) {
+                            // 지도 로드 완료 후 컨트롤러 조작이 필요하면 여기서 수행
+                          },
                         ),
-                      ),
+                      // 현재 위치 버튼 (지도의 위에 떠 있음)
                       Positioned(
                         right: 14,
                         bottom: 14,
                         child: FloatingActionButton.small(
                           onPressed: () => _select('현재 위치 (궁동)'),
                           backgroundColor: _surface,
-                          child: const Icon(
-                            Icons.my_location_rounded,
-                            color: _primaryText,
-                          ),
+                          child: const Icon(Icons.my_location_rounded, color: _primaryText),
                         ),
                       ),
                     ],

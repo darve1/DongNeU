@@ -4,7 +4,9 @@ class _AppRouter extends StatelessWidget {
   const _AppRouter({
     required this.screen,
     required this.onOpen,
+    required this.onGoBack,
     required this.onOpenCustomerService,
+    required this.onOpenOwnerService,
     required this.onAuthenticated,
     required this.onRoleSelected,
     required this.onSignOut,
@@ -14,6 +16,7 @@ class _AppRouter extends StatelessWidget {
     required this.onLocationChange,
     required this.aiQuery,
     required this.onAiQueryChange,
+    required this.aiConditions,
     required this.aiRecommendations,
     required this.onAiRecommend,
     required this.stores,
@@ -30,7 +33,9 @@ class _AppRouter extends StatelessWidget {
 
   final AppScreen screen;
   final ValueChanged<AppScreen> onOpen;
+  final VoidCallback onGoBack;
   final VoidCallback onOpenCustomerService;
+  final VoidCallback onOpenOwnerService;
   final Future<void> Function() onAuthenticated;
   final Future<void> Function(String role) onRoleSelected;
   final Future<void> Function() onSignOut;
@@ -40,6 +45,7 @@ class _AppRouter extends StatelessWidget {
   final ValueChanged<String> onLocationChange;
   final String aiQuery;
   final ValueChanged<String> onAiQueryChange;
+  final AiConditions? aiConditions;
   final List<AiRecommendation> aiRecommendations;
   final Future<List<AiRecommendation>> Function(String query) onAiRecommend;
   final List<DongNeuStore> stores;
@@ -79,15 +85,19 @@ class _AppRouter extends StatelessWidget {
       ),
       AppScreen.aiCondition => AiConditionConfirmationScreen(
         onOpen: onOpen,
+        onGoBack: onGoBack,
         query: aiQuery,
+        aiConditions: aiConditions,
       ),
       AppScreen.aiChat => AiChatScreen(
         onOpen: onOpen,
+        onGoBack: onGoBack,
         onQueryChange: onAiQueryChange,
         onRecommend: onAiRecommend,
       ),
       AppScreen.recommendations => Top3RecommendationsScreen(
         onOpen: onOpen,
+        onGoBack: onGoBack,
         query: aiQuery,
         recommendations: aiRecommendations,
         stores: stores,
@@ -96,6 +106,8 @@ class _AppRouter extends StatelessWidget {
       AppScreen.filters => ManualSearchFiltersScreen(
         onOpen: onOpen,
         myLocation: myLocation,
+        onAiQueryChange: onAiQueryChange,
+        onAiRecommend: onAiRecommend,
       ),
       AppScreen.storeDetail => StoreDetailScreen(
         onOpen: onOpen,
@@ -125,6 +137,7 @@ class _AppRouter extends StatelessWidget {
         onSignOut: onSignOut,
         userEmail: userEmail,
         accountRole: accountRole,
+        onOpenOwnerService: onOpenOwnerService,
       ),
     };
   }

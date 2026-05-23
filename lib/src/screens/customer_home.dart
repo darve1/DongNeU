@@ -367,14 +367,7 @@ class _LocalPicksSection extends StatelessWidget {
   }
 
   String _tagForStore(DongNeuStore store, int index) {
-    if (store.features.contains('착한가격업소') || store.tags.contains('가성비')) {
-      return '아껴U';
-    }
-    if (store.features.contains('새로생긴가게') || store.tags.contains('새로운')) {
-      return '새로워U';
-    }
-    if (index == 0) return '가까워U';
-    return '동네픽';
+    return '오늘의 동네픽';
   }
 
   IconData _iconForCategory(String category) {
@@ -561,10 +554,14 @@ class AiConditionConfirmationScreen extends StatelessWidget {
   const AiConditionConfirmationScreen({
     super.key,
     required this.onOpen,
+    required this.onGoBack,
     this.query = AppDefaults.aiConditionQuery,
+    this.aiConditions,
   });
   final ValueChanged<AppScreen> onOpen;
+  final VoidCallback onGoBack;
   final String query;
+  final AiConditions? aiConditions;
 
   @override
   Widget build(BuildContext context) {
@@ -591,7 +588,7 @@ class AiConditionConfirmationScreen extends StatelessWidget {
       children: [
         _TopBar(
           title: '',
-          onBack: () => onOpen(AppScreen.home),
+          onBack: onGoBack,
           trailing: _IconButton(
             icon: Icons.close_rounded,
             onPressed: () => onOpen(AppScreen.home),
@@ -643,42 +640,41 @@ class AiConditionConfirmationScreen extends StatelessWidget {
                     const SizedBox(height: 18),
                     const Divider(color: _alternate),
                     const SizedBox(height: 14),
-                    const _ConditionRow(
+                    _ConditionRow(
                       icon: Icons.location_on_rounded,
                       label: '위치',
-                      value: '충남대 근처',
+                      value: aiConditions?.locationLabel ?? '-',
                     ),
-                    const _ConditionRow(
+                    _ConditionRow(
                       icon: Icons.payments_rounded,
                       label: '예산',
-                      value: '만 원 이하',
+                      value: aiConditions?.budgetLabel ?? '-',
                     ),
-                    const _ConditionRow(
+                    _ConditionRow(
                       icon: Icons.schedule_rounded,
                       label: '시간대',
-                      value: '저녁',
+                      value: aiConditions?.timeLabel ?? '-',
                     ),
-                    const _ConditionRow(
+                    _ConditionRow(
                       icon: Icons.person_rounded,
                       label: '상황',
-                      value: '혼밥',
+                      value: aiConditions?.situationLabel ?? '-',
                     ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('추출된 키워드', style: theme.textTheme.titleSmall),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: const [
-                        _Pill(label: '가성비', selected: true),
-                        _Pill(label: '조용한', selected: false),
-                        _Pill(label: '로컬맛집', selected: false),
-                        _Pill(label: '든든한', selected: true),
-                      ],
-                    ),
+                    if (aiConditions != null && aiConditions!.keywords.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('추출된 키워드', style: theme.textTheme.titleSmall),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: aiConditions!.keywords
+                            .map((kw) => _Pill(label: kw, selected: true))
+                            .toList(),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -752,12 +748,14 @@ class Top3RecommendationsScreen extends StatelessWidget {
   const Top3RecommendationsScreen({
     super.key,
     required this.onOpen,
+    required this.onGoBack,
     required this.query,
     required this.recommendations,
     required this.stores,
     required this.onStoreNameOpen,
   });
   final ValueChanged<AppScreen> onOpen;
+  final VoidCallback onGoBack;
   final String query;
   final List<AiRecommendation> recommendations;
   final List<DongNeuStore> stores;
@@ -795,7 +793,7 @@ class Top3RecommendationsScreen extends StatelessWidget {
           _TopBar(
             title: '동네U의 추천',
             subtitle: '오늘의 완벽한 3곳을 찾았어요!',
-            onBack: () => onOpen(AppScreen.aiCondition),
+            onBack: onGoBack,
             trailing: _IconButton(
               icon: Icons.refresh_rounded,
               onPressed: () => onOpen(AppScreen.aiChat),

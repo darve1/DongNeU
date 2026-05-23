@@ -5,9 +5,14 @@ class ManualSearchFiltersScreen extends StatefulWidget {
     super.key,
     required this.onOpen,
     required this.myLocation,
+    required this.onAiQueryChange,
+    required this.onAiRecommend,
   });
   final ValueChanged<AppScreen> onOpen;
   final String myLocation;
+  final ValueChanged<String> onAiQueryChange;
+  final Future<List<AiRecommendation>> Function(String query) onAiRecommend;
+
   @override
   State<ManualSearchFiltersScreen> createState() =>
       _ManualSearchFiltersScreenState();
@@ -20,6 +25,41 @@ class _ManualSearchFiltersScreenState extends State<ManualSearchFiltersScreen> {
   bool _isGoodPrice = true;
   bool _isMarket = false;
   bool _isNew = false;
+  bool _isSearching = false;
+
+  Future<void> _handleSearch() async {
+    if (_isSearching) return;
+    setState(() => _isSearching = true);
+
+    final budgets = ['~7천원', '~1만원', '~1.5만원', '상관없음'];
+    final situations = ['혼밥', '데이트', '친구와', '가족모임', '빠른 식사'];
+
+    final queryParts = <String>[];
+    queryParts.add(widget.myLocation);
+    queryParts.add(budgets[_selectedBudget]);
+    queryParts.add(situations[_selectedSituation]);
+    queryParts.add(_selectedCategory);
+    if (_isGoodPrice) queryParts.add('착한가격업소');
+    if (_isMarket) queryParts.add('전통시장');
+    if (_isNew) queryParts.add('새로생긴');
+    queryParts.add('맛집 추천해줘');
+
+    final query = queryParts.join(' ');
+    widget.onAiQueryChange(query);
+
+    try {
+      await widget.onAiRecommend(query);
+      if (!mounted) return;
+      widget.onOpen(AppScreen.recommendations);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('검색 실패: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSearching = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -202,8 +242,8 @@ class _ManualSearchFiltersScreenState extends State<ManualSearchFiltersScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _PrimaryButton(
-                    label: '결과 보기',
-                    onPressed: () => widget.onOpen(AppScreen.recommendations),
+                    label: _isSearching ? '검색 중...' : '결과 보기',
+                    onPressed: _isSearching ? () {} : _handleSearch,
                   ),
                 ),
               ],

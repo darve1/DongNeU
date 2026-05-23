@@ -54,7 +54,7 @@ app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_CONTENT_LENGTH", "16384"))
 SUPABASE_URL = _required_env("SUPABASE_URL").rstrip("/")
 SUPABASE_ANON_KEY = _required_env("SUPABASE_ANON_KEY", "SUPABASE_KEY")
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://127.0.0.1:11434/api/generate")
-MAIN_MODEL = os.getenv("AI_MODEL", os.getenv("MAIN_MODEL", "qwen2.5:7b"))
+MAIN_MODEL = os.getenv("OLLAMA_MODEL", os.getenv("MAIN_MODEL", "qwen2.5:7b"))
 KAKAO_REST_API_KEY = os.getenv("KAKAO_REST_API_KEY", "").strip()
 ALLOWED_ORIGINS = {
     origin.strip()
@@ -74,10 +74,20 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 _rate_buckets: dict[str, deque[float]] = defaultdict(deque)
 
 
+def _is_origin_allowed(origin: str) -> bool:
+    for allowed in ALLOWED_ORIGINS:
+        if allowed.endswith(":*"):
+            if origin.startswith(allowed[:-1]):
+                return True
+        elif origin == allowed:
+            return True
+    return False
+
+
 @app.after_request
 def add_security_headers(response):
     origin = request.headers.get("Origin")
-    if origin and origin in ALLOWED_ORIGINS:
+    if origin and _is_origin_allowed(origin):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Headers"] = (
@@ -121,6 +131,12 @@ def _error(message: str, status: int):
 
 def _safe_log_text(text: str, max_length: int = 120) -> str:
     return re.sub(r"\s+", " ", text).strip()[:max_length]
+
+def clean_json_response(text: str) -> dict:
+    text = text.strip()
+    text = re.sub(r'^```(?:json)?', '', text).strip()
+    text = re.sub(r'```$', '', text).strip()
+    return json.loads(text)
 
 
 def _check_rate_limit(key: str) -> bool:
@@ -245,7 +261,38 @@ def search_restaurants(keywords, top_n=10):
     return ranked[:top_n]
 
 
-def _ollama_generate(prompt: str, temperature: float, timeout: int):
+def _extract_conditions_from_llm(user_input: str) -> dict:
+    prompt = f"""너는 맛집 검색용 조건 및 키워드 추출기다.
+사용자의 입력(띄어쓰기가 없거나 은어가 포함될 수 있음)을 꼼꼼히 분석하여 다음 5가지 항목을 추출해라.
+1. location (위치): 지역이나 동네 (예: 충남대, 궁동 등)
+2. budget (예산): 금액 관련 (예: 만원이하, 가성비 등)
+3. time (시간대): 식사 시간 (예: 아침, 점심, 저녁 등)
+4. situation (상황): 누구와, 어떤 목적으로 (예: 남자세명, 혼밥, 데이트 등)
+5. keywords (검색키워드): 실제 메뉴나 핵심 특징 (예: 돈까스, 맛집 등)
+
+각 항목에 해당하는 정보가 명확하지 않으면 "정보 없음"으로 적어라. keywords는 2~4개의 단어로 구성된 배열(List)로 만들어라.
+반드시 한국어로만 작성하고, 한자(중국어)는 절대 포함하지 마라.
+반드시 아래 JSON 스키마로만 답변해라. 절대 다른 말은 하지 마라.
+{{"location": "...", "budget": "...", "time": "...", "situation": "...", "keywords": ["...", "..."]}}
+
+<user_input>
+{user_input}
+</user_input>"""
+    try:
+        response_text = _ollama_generate(prompt, temperature=0.3, timeout=30, num_predict=150, num_ctx=512)
+        return clean_json_response(response_text)
+    except Exception as e:
+        print(f"[error] Keyword extraction failed: {e}")
+        return {
+            'location': '정보 없음',
+            'budget': '정보 없음',
+            'time': '정보 없음',
+            'situation': '정보 없음',
+            'keywords': [],
+        }
+
+
+def _ollama_generate(prompt: str, temperature: float, timeout: int, num_predict: int = 512, num_ctx: int = 2048):
     response = requests.post(
         OLLAMA_API_URL,
         json={
@@ -253,7 +300,12 @@ def _ollama_generate(prompt: str, temperature: float, timeout: int):
             "prompt": prompt,
             "format": "json",
             "stream": False,
-            "options": {"temperature": temperature},
+            "keep_alive": "1h",
+            "options": {
+                "temperature": temperature,
+                "num_predict": num_predict,
+                "num_ctx": num_ctx,
+            },
         },
         timeout=timeout,
     )
@@ -419,45 +471,26 @@ def process_ai_request():
     conditions = {}
     candidate_stores: list[dict] = []
     if requested_role == "user":
-        keyword_prompt = f"""너는 맛집 검색용 조건 및 키워드 추출기다.
-사용자의 상황을 분석해서 위치, 예산, 시간대, 상황 정보와 검색에 쓸 핵심 단어를 2~4개만 뽑아라.
-사용자 입력에 특정 정보가 명시되어 있지 않다면 "정보 없음"이라고 기입해라.
-반드시 아래 JSON 스키마로만 답변해라.
-{{"location": "위치 정보", "budget": "예산 정보", "time": "시간대 정보", "situation": "상황 정보", "keywords": ["키워드1", "키워드2"]}}
-
-<user_input>
-{user_input}
-</user_input>"""
-
-        try:
-            keyword_output = _ollama_generate(keyword_prompt, temperature=0.3, timeout=30)
-            conditions = json.loads(keyword_output)
-            keywords = _sanitize_keywords(conditions.get("keywords", []))
-        except Exception as error:
-            print(f"[warn] keyword extraction failed: {type(error).__name__}")
-            conditions = {}
-            keywords = []
-
-        candidate_stores = search_restaurants(keywords, top_n=10)
+        conditions = _extract_conditions_from_llm(user_input)
+        keywords = _sanitize_keywords(conditions.get("keywords", []))
+        candidate_stores = search_restaurants(keywords, top_n=5)
         db_context = _build_store_context(candidate_stores)
 
-        isolated_prompt = f"""너는 대전·충청권 로컬마켓 서비스 '동네U'의 맛집 추천 AI다.
-사용자의 상황에 공감하되, 반드시 아래 제공된 [DB 검색 후보] 안에서만 가장 어울리는 3곳을 골라 추천해라.
-가상의 식당을 절대 지어내면 안 된다.
+        isolated_prompt = f"""동네U 맛집 추천 AI. 아래 후보 가게 중 사용자 상황에 맞는 3곳만 골라라. 가상의 가게 금지.
+반드시 자연스러운 한국어로만 작성하고, 한자(중국어)는 절대 포함하지 마라.
 
-[DB 검색 후보]
+[후보 가게]
 {db_context}
 
-반드시 아래 JSON 스키마 형식으로만 답변해라.
-{{"recommendations": [{{"card_type": "동네U추천", "store_name": "가게이름", "reason": "사용자 상황에 맞춘 추천 이유"}}]}}
+JSON만 출력:
+{{"recommendations":[{{"card_type":"동네U추천","store_name":"가게명","reason":"추천이유(50자 이내)"}}]}}
 
-<user_input>
-{user_input}
-</user_input>"""
+사용자 입력: {user_input}"""
     else:
         isolated_prompt = f"""너는 소상공인을 돕는 '동네U'의 마케터 AI다.
 사장님이 입력한 메뉴와 가게 특징을 바탕으로 자연스러운 인스타그램 홍보 문구와 해시태그를 생성해라.
-반드시 아래 JSON 스키마 형식으로만 답변해라.
+반드시 한국어로만 작성하고, 한자(중국어)는 절대 포함하지 마라.
+반드시 아래 JSON 스키마 형식으로만 답변하고, 절대 다른 설명이나 인사말을 덧붙이지 마라.
 {{"marketing": {{"post_text": "홍보문구 본문", "hashtags": ["#태그1", "#태그2"]}}}}
 
 <owner_input>
@@ -465,7 +498,7 @@ def process_ai_request():
 </owner_input>"""
 
     try:
-        llm_output = _ollama_generate(isolated_prompt, temperature=0.7, timeout=45)
+        llm_output = _ollama_generate(isolated_prompt, temperature=0.7, timeout=45, num_predict=600)
     except Exception as error:
         print(f"[error] Ollama request failed: {type(error).__name__}")
         return _error("AI 추론 서버 통신 에러.", 500)
@@ -473,7 +506,7 @@ def process_ai_request():
     try:
         if "동네U의 맛집 추천 AI" in llm_output or "DB 검색 후보" in llm_output:
             raise ValueError("prompt leakage")
-        parsed_result = json.loads(llm_output)
+        parsed_result = clean_json_response(llm_output)
         if requested_role == "user":
             parsed_result = _validate_user_recommendations(parsed_result, candidate_stores)
             if conditions:
@@ -483,6 +516,85 @@ def process_ai_request():
         return jsonify({"status": "success", "data": parsed_result})
     except Exception as error:
         print(f"[error] invalid AI output: {type(error).__name__}")
+        return _error("AI 응답 파싱 실패.", 500)
+
+
+@app.route('/api/timedeal', methods=['POST', 'OPTIONS'])
+def generate_timedeal():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    if not _check_rate_limit(f"ip:{request.remote_addr or 'unknown'}"):
+        return _error("요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", 429)
+
+    user = _authenticate_request()
+    if user is None:
+        return _error("인증이 필요합니다.", 401)
+    if not _has_required_role(user, "owner"):
+        return _error("타임딜 쿠폰 생성 권한이 없습니다.", 403)
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return _error("JSON 요청 본문이 필요합니다.", 400)
+        
+    store_name = str(data.get('store_name', '')).strip()
+    store_category = str(data.get('store_category', '')).strip()
+    address = str(data.get('address', '')).strip()
+    signature_menus = data.get('signature_menus', '')
+    special_note = str(data.get('special_note', '')).strip()
+
+    if isinstance(signature_menus, list):
+        menus_str = ", ".join([str(m) for m in signature_menus])
+    else:
+        menus_str = str(signature_menus).strip()
+
+    combined_input = f"{store_name} {store_category} {address} {menus_str} {special_note}"
+
+    print(f"\n--- 📥 [타임딜 쿠폰 요청 수신] ---")
+    print(f"가게명: {store_name}")
+
+    if is_heuristic_injection(combined_input):
+        return _error("허용되지 않는 명령 패턴이 포함되어 있습니다.", 400)
+
+    gr_result = guardrail(combined_input)[0]
+    if gr_result['label'] == 'INJECTION' and gr_result['score'] > 0.5:
+        return _error("시스템 탈취 지시어가 감지되어 차단되었습니다.", 400)
+
+    print("⏳ [메인 LLM] 타임딜 쿠폰 기획 중...")
+    prompt = f"""너는 배달/지역 플랫폼에서 10년 차 경력을 가진 '퍼포먼스 마케터'야.
+사장님이 등록한 가게 정보를 바탕으로, 동네 고객들이 당장 방문하고 싶게 만드는 '타임딜 할인 쿠폰' 전략 2가지를 기획해줘.
+반드시 한국어로만 작성하고, 한자(중국어)는 절대 포함하지 마라.
+
+[가게 정보]
+- 가게명: {store_name}
+- 업종: {store_category}
+- 주소: {address}
+- 대표메뉴 및 가격 목록: {menus_str}
+- 우리 가게만의 특별한 점: {special_note}
+
+아래 JSON 형식으로만 답변하고, 절대 다른 말은 하지 마라.
+{{
+  "coupons": [
+    {{
+      "coupon_title": "쿠폰 이름 (예: 비오는 날 오후 3시 한정, 파전 반값!)",
+      "discount_type": "할인 방식 (예: 50% 할인, 사이드 메뉴 무료 등)",
+      "target_audience": "타겟 고객 (예: 늦은 점심을 먹는 대학생)",
+      "marketing_text": "고객 앱에 노출될 매력적인 쿠폰 설명 (3줄 이내)"
+    }}
+  ]
+}}"""
+
+    try:
+        llm_output = _ollama_generate(prompt, temperature=0.7, timeout=45, num_predict=600)
+    except Exception as e:
+        print(f"❌ [에러] Ollama 서버 통신 실패: {e}")
+        return _error("AI 추론 서버(Ollama) 통신 에러.", 500)
+
+    try:
+        parsed_result = clean_json_response(llm_output)
+        print("✅ [완료] 타임딜 쿠폰 생성 완료")
+        return jsonify({"status": "success", "data": parsed_result})
+    except Exception:
         return _error("AI 응답 파싱 실패.", 500)
 
 

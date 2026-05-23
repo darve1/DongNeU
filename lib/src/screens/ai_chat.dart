@@ -4,10 +4,12 @@ class AiChatScreen extends StatefulWidget {
   const AiChatScreen({
     super.key,
     required this.onOpen,
+    required this.onGoBack,
     required this.onQueryChange,
     required this.onRecommend,
   });
   final ValueChanged<AppScreen> onOpen;
+  final VoidCallback onGoBack;
   final ValueChanged<String> onQueryChange;
   final Future<List<AiRecommendation>> Function(String query) onRecommend;
   @override
@@ -76,7 +78,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
         children: [
           _TopBar(
             title: 'AI 동네 검색',
-            onBack: () => widget.onOpen(AppScreen.home),
+            onBack: widget.onGoBack,
           ),
           Expanded(
             child: ListView.builder(

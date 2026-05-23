@@ -1,5 +1,37 @@
 part of '../../main.dart';
 
+class AiConditions {
+  const AiConditions({
+    this.location,
+    this.budget,
+    this.time,
+    this.situation,
+    this.keywords = const [],
+  });
+  final String? location;
+  final String? budget;
+  final String? time;
+  final String? situation;
+  final List<String> keywords;
+
+  static AiConditions? fromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    return AiConditions(
+      location: json['location'] as String?,
+      budget: json['budget'] as String?,
+      time: json['time'] as String?,
+      situation: json['situation'] as String?,
+      keywords: _stringListFromDynamic(json['keywords']),
+    );
+  }
+
+  String _val(String? v) => (v == null || v == '정보 없음') ? '-' : v;
+  String get locationLabel => _val(location);
+  String get budgetLabel => _val(budget);
+  String get timeLabel => _val(time);
+  String get situationLabel => _val(situation);
+}
+
 class AiRecommendation {
   const AiRecommendation({
     required this.cardType,

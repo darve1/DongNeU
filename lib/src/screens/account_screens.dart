@@ -94,11 +94,13 @@ class MyPageScreen extends StatelessWidget {
     required this.onSignOut,
     required this.userEmail,
     required this.accountRole,
+    required this.onOpenOwnerService,
   });
   final ValueChanged<AppScreen> onOpen;
   final Future<void> Function() onSignOut;
   final String? userEmail;
   final String? accountRole;
+  final VoidCallback onOpenOwnerService;
 
   String get _roleLabel {
     return switch (accountRole) {
@@ -226,7 +228,7 @@ class MyPageScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 _SurfaceCard(
                   color: _primary.withOpacity(0.06),
-                  onTap: () => onOpen(AppScreen.userType),
+                  onTap: onOpenOwnerService,
                   child: Row(
                     children: [
                       const _IconTile(icon: Icons.add_business_rounded),

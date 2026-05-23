@@ -27,9 +27,16 @@ part 'src/screens/ai_chat.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (!kIsWeb) {
-    await NaverMapSdk.instance.initialize(clientId: AppConfig.naverMapClientId);
+
+  // 네이버 지도 SDK 초기화 (안드로이드/iOS 전용)
+  try {
+    if (!kIsWeb) {
+      await NaverMapSdk.instance.initialize(clientId: AppConfig.naverMapClientId);
+    }
+  } catch (e) {
+    debugPrint('NaverMap 초기화 에러: $e');
   }
+
   if (AppConfig.isSupabaseConfigured) {
     await Supabase.initialize(
       url: AppConfig.supabaseUrl,

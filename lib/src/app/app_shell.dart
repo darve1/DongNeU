@@ -28,9 +28,11 @@ class DongNeuApp extends StatefulWidget {
 
 class _DongNeuAppState extends State<DongNeuApp> {
   AppScreen _screen = AppScreen.auth;
+  final List<AppScreen> _history = [];
   String _myLocation = AppDefaults.location;
   String _aiQuery = AppDefaults.aiQuery;
   List<AiRecommendation> _aiRecommendations = const [];
+  AiConditions? _aiConditions;
   List<DongNeuStore> _stores = const [];
   Set<String> _savedStoreIds = const {};
   DongNeuStore? _selectedStore;
@@ -40,12 +42,32 @@ class _DongNeuAppState extends State<DongNeuApp> {
   String? _accountRole;
 
   void _open(AppScreen screen) {
-    setState(() => _screen = screen);
+    setState(() {
+      _history.add(_screen);
+      _screen = screen;
+    });
+  }
+
+  void _goBack() {
+    if (_history.isEmpty) return;
+    setState(() => _screen = _history.removeLast());
   }
 
   void _openCustomerService() {
-    _open(AppScreen.home);
+    setState(() {
+      _accountRole = AppRoles.customer;
+      _screen = AppScreen.home;
+    });
+    unawaited(_updateRoleInDb(AppRoles.customer));
     unawaited(_refreshCustomerData());
+  }
+
+  void _openOwnerService() {
+    setState(() {
+      _accountRole = AppRoles.owner;
+      _screen = AppScreen.ownerDashboard;
+    });
+    unawaited(_updateRoleInDb(AppRoles.owner));
   }
 
   void _setMyLocation(String loc) {
@@ -146,13 +168,15 @@ class _DongNeuAppState extends State<DongNeuApp> {
             .select(StoreQueries.storeSelectColumns)
             .eq('is_active', true)
             .order('rating', ascending: false)
-            .limit(12),
+            .limit(50),
         Supabase.instance.client.from('saved_stores').select('store_id'),
       ]);
 
       if (!mounted) return;
+      final shuffled = List<DongNeuStore>.from(_parseStoreRows(responses[0]))
+        ..shuffle();
       setState(() {
-        _stores = _parseStoreRows(responses[0]);
+        _stores = shuffled;
         _savedStoreIds = (responses[1] as List)
             .whereType<Map>()
             .map((item) => item['store_id']?.toString())
@@ -278,7 +302,7 @@ class _DongNeuAppState extends State<DongNeuApp> {
       throw Exception('검색 조건을 입력해주세요.');
     }
 
-    final uri = Uri.parse('$AppConfig.flaskAiBaseUrl/api/ai');
+    final uri = Uri.parse('${AppConfig.flaskAiBaseUrl}/api/ai');
     final response = await http
         .post(
           uri,
@@ -324,10 +348,16 @@ class _DongNeuAppState extends State<DongNeuApp> {
       recommendations: recommendations,
     );
 
+    final conditionsRaw = data is Map<String, dynamic> ? data['conditions'] : null;
+    final conditions = conditionsRaw is Map<String, dynamic>
+        ? AiConditions.fromJson(conditionsRaw)
+        : null;
+
     if (mounted) {
       setState(() {
         _aiQuery = trimmedQuery;
         _aiRecommendations = recommendations;
+        if (conditions != null) _aiConditions = conditions;
       });
     }
     return recommendations;
@@ -383,10 +413,9 @@ class _DongNeuAppState extends State<DongNeuApp> {
     }
   }
 
-  Future<void> _selectAccountRole(String role) async {
+  Future<void> _updateRoleInDb(String role) async {
     final session = _session;
     if (!AppConfig.isSupabaseConfigured || session == null) return;
-
     final user = session.user;
     await Supabase.instance.client.from('profiles').upsert({
       'id': user.id,
@@ -394,6 +423,10 @@ class _DongNeuAppState extends State<DongNeuApp> {
       'display_name': user.userMetadata?['display_name'],
       'role': role,
     });
+  }
+
+  Future<void> _selectAccountRole(String role) async {
+    await _updateRoleInDb(role);
 
     if (!mounted) return;
     setState(() {
@@ -429,7 +462,9 @@ class _DongNeuAppState extends State<DongNeuApp> {
       home: _AppRouter(
         screen: _screen,
         onOpen: _open,
+        onGoBack: _goBack,
         onOpenCustomerService: _openCustomerService,
+        onOpenOwnerService: _openOwnerService,
         onAuthenticated: _handleAuthenticated,
         onRoleSelected: _selectAccountRole,
         onSignOut: _signOut,
@@ -439,6 +474,7 @@ class _DongNeuAppState extends State<DongNeuApp> {
         onLocationChange: _setMyLocation,
         aiQuery: _aiQuery,
         onAiQueryChange: _setAiQuery,
+        aiConditions: _aiConditions,
         aiRecommendations: _aiRecommendations,
         onAiRecommend: _requestAiRecommendations,
         stores: _stores,
