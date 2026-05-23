@@ -12,8 +12,11 @@ const _flaskAiBaseUrl = String.fromEnvironment(
   'FLASK_AI_BASE_URL',
   defaultValue: 'http://127.0.0.1:5000',
 );
+const _kakaoRestApiKey = String.fromEnvironment('KAKAO_REST_API_KEY');
 const _customerRole = 'customer';
 const _ownerRole = 'owner';
+const _storeSelectColumns =
+    'id, name, category, address, description, image_url, rating, review_count, price_range, opening_hours, phone, tags, features';
 
 class AiRecommendation {
   const AiRecommendation({
@@ -42,6 +45,161 @@ class AiRecommendation {
 
   Map<String, dynamic> toJson() {
     return {'card_type': cardType, 'store_name': storeName, 'reason': reason};
+  }
+}
+
+class DongNeuStore {
+  const DongNeuStore({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.address,
+    this.description,
+    this.imageUrl,
+    required this.rating,
+    required this.reviewCount,
+    this.priceRange,
+    this.openingHours,
+    this.phone,
+    required this.tags,
+    required this.features,
+  });
+
+  final String id;
+  final String name;
+  final String category;
+  final String address;
+  final String? description;
+  final String? imageUrl;
+  final double rating;
+  final int reviewCount;
+  final String? priceRange;
+  final String? openingHours;
+  final String? phone;
+  final List<String> tags;
+  final List<String> features;
+
+  factory DongNeuStore.fromJson(Map<String, dynamic> json) {
+    return DongNeuStore(
+      id: json['id']?.toString() ?? '',
+      name: (json['name'] as String?)?.trim().isNotEmpty == true
+          ? (json['name'] as String).trim()
+          : '이름 없는 가게',
+      category: (json['category'] as String?)?.trim().isNotEmpty == true
+          ? (json['category'] as String).trim()
+          : '카테고리 없음',
+      address: (json['address'] as String?)?.trim().isNotEmpty == true
+          ? (json['address'] as String).trim()
+          : '주소 정보 없음',
+      description: (json['description'] as String?)?.trim(),
+      imageUrl: (json['image_url'] as String?)?.trim(),
+      rating: double.tryParse(json['rating']?.toString() ?? '') ?? 0,
+      reviewCount: int.tryParse(json['review_count']?.toString() ?? '') ?? 0,
+      priceRange: (json['price_range'] as String?)?.trim(),
+      openingHours: (json['opening_hours'] as String?)?.trim(),
+      phone: (json['phone'] as String?)?.trim(),
+      tags: _stringListFromDynamic(json['tags']),
+      features: _stringListFromDynamic(json['features']),
+    );
+  }
+
+  String get ratingLabel => rating == 0 ? '-' : rating.toStringAsFixed(1);
+}
+
+class StoreMenuItem {
+  const StoreMenuItem({
+    required this.id,
+    required this.name,
+    this.description,
+    required this.price,
+    required this.isRepresentative,
+  });
+
+  final String id;
+  final String name;
+  final String? description;
+  final int price;
+  final bool isRepresentative;
+
+  factory StoreMenuItem.fromJson(Map<String, dynamic> json) {
+    return StoreMenuItem(
+      id: json['id']?.toString() ?? '',
+      name: (json['name'] as String?)?.trim().isNotEmpty == true
+          ? (json['name'] as String).trim()
+          : '이름 없는 메뉴',
+      description: (json['description'] as String?)?.trim(),
+      price: int.tryParse(json['price']?.toString() ?? '') ?? 0,
+      isRepresentative: json['is_representative'] == true,
+    );
+  }
+}
+
+List<String> _stringListFromDynamic(dynamic value) {
+  if (value is List) {
+    return value
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+  return const [];
+}
+
+String _formatWon(int price) {
+  final text = price.toString();
+  final buffer = StringBuffer();
+  for (var i = 0; i < text.length; i++) {
+    final remaining = text.length - i;
+    buffer.write(text[i]);
+    if (remaining > 1 && remaining % 3 == 1) {
+      buffer.write(',');
+    }
+  }
+  return '$buffer원';
+}
+
+class AddressSearchResult {
+  const AddressSearchResult({
+    required this.address,
+    this.roadAddress,
+    this.lat,
+    this.lng,
+  });
+
+  final String address;
+  final String? roadAddress;
+  final double? lat;
+  final double? lng;
+
+  String get displayAddress =>
+      roadAddress?.isNotEmpty == true ? roadAddress! : address;
+
+  factory AddressSearchResult.fromKakao(Map<String, dynamic> json) {
+    final addressData = json['address'];
+    final roadAddressData = json['road_address'];
+    final addressName = addressData is Map
+        ? addressData['address_name'] as String?
+        : null;
+    final roadAddressName = roadAddressData is Map
+        ? roadAddressData['address_name'] as String?
+        : null;
+    return AddressSearchResult(
+      address: addressName ?? roadAddressName ?? '주소 정보 없음',
+      roadAddress: roadAddressName,
+      lat: double.tryParse(json['y']?.toString() ?? ''),
+      lng: double.tryParse(json['x']?.toString() ?? ''),
+    );
+  }
+}
+
+class _MenuDraft {
+  _MenuDraft();
+
+  final nameController = TextEditingController();
+  final priceController = TextEditingController();
+
+  void dispose() {
+    nameController.dispose();
+    priceController.dispose();
   }
 }
 
@@ -95,6 +253,11 @@ class _DongNeuAppState extends State<DongNeuApp> {
   String _myLocation = '충남대 궁동';
   String _aiQuery = '충남대 근처 가성비 혼밥 추천해줘';
   List<AiRecommendation> _aiRecommendations = const [];
+  List<DongNeuStore> _stores = const [];
+  Set<String> _savedStoreIds = const {};
+  DongNeuStore? _selectedStore;
+  bool _isLoadingStores = false;
+  String? _storesError;
   Session? _session;
   String? _accountRole;
 
@@ -138,11 +301,32 @@ class _DongNeuAppState extends State<DongNeuApp> {
     if (session == null) return;
 
     try {
+      final resultStoreIds = recommendations
+          .map((recommendation) {
+            final normalizedName = recommendation.storeName.replaceAll(
+              RegExp(r'\s+'),
+              '',
+            );
+            for (final store in _stores) {
+              if (store.name.replaceAll(RegExp(r'\s+'), '') == normalizedName) {
+                return store.id;
+              }
+            }
+            return null;
+          })
+          .whereType<String>()
+          .toSet()
+          .toList(growable: false);
       await Supabase.instance.client.from('recommendation_history').insert({
         'user_id': session.user.id,
         'query': query,
         'location_text': _myLocation,
         'keywords': _keywordsFromQuery(query),
+        'candidate_store_ids': _stores
+            .map((store) => store.id)
+            .take(12)
+            .toList(growable: false),
+        'result_store_ids': resultStoreIds,
         'ai_response': {
           'flask_response': response,
           'recommendations': recommendations
@@ -153,6 +337,168 @@ class _DongNeuAppState extends State<DongNeuApp> {
     } catch (error) {
       debugPrint('Failed to save recommendation history: $error');
     }
+  }
+
+  List<DongNeuStore> _parseStoreRows(dynamic response) {
+    if (response is! List) return const [];
+    return response
+        .whereType<Map>()
+        .map((item) => DongNeuStore.fromJson(Map<String, dynamic>.from(item)))
+        .where((store) => store.id.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<void> _refreshCustomerData() async {
+    if (!_isSupabaseConfigured ||
+        Supabase.instance.client.auth.currentSession == null) {
+      if (!mounted) return;
+      setState(() {
+        _stores = const [];
+        _savedStoreIds = const {};
+        _isLoadingStores = false;
+        _storesError = null;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoadingStores = true;
+        _storesError = null;
+      });
+    }
+
+    try {
+      final responses = await Future.wait([
+        Supabase.instance.client
+            .from('stores')
+            .select(_storeSelectColumns)
+            .eq('is_active', true)
+            .order('rating', ascending: false)
+            .limit(12),
+        Supabase.instance.client.from('saved_stores').select('store_id'),
+      ]);
+
+      if (!mounted) return;
+      setState(() {
+        _stores = _parseStoreRows(responses[0]);
+        _savedStoreIds = (responses[1] as List)
+            .whereType<Map>()
+            .map((item) => item['store_id']?.toString())
+            .whereType<String>()
+            .toSet();
+        _isLoadingStores = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingStores = false;
+        _storesError = error.toString();
+      });
+    }
+  }
+
+  Future<DongNeuStore?> _fetchStoreById(String storeId) async {
+    if (!_isSupabaseConfigured) return null;
+    final response = await Supabase.instance.client
+        .from('stores')
+        .select(_storeSelectColumns)
+        .eq('id', storeId)
+        .maybeSingle();
+    if (response == null) return null;
+    return DongNeuStore.fromJson(response);
+  }
+
+  Future<DongNeuStore?> _fetchStoreByName(String storeName) async {
+    if (!_isSupabaseConfigured) return null;
+    final response = await Supabase.instance.client
+        .from('stores')
+        .select(_storeSelectColumns)
+        .eq('name', storeName)
+        .maybeSingle();
+    if (response == null) return null;
+    return DongNeuStore.fromJson(response);
+  }
+
+  void _openStoreDetail(DongNeuStore store) {
+    setState(() {
+      _selectedStore = store;
+      _screen = AppScreen.storeDetail;
+    });
+  }
+
+  Future<bool> _openStoreById(String storeId) async {
+    DongNeuStore? cached;
+    for (final store in _stores) {
+      if (store.id == storeId) {
+        cached = store;
+        break;
+      }
+    }
+    if (cached != null) {
+      _openStoreDetail(cached);
+      return true;
+    }
+
+    final store = await _fetchStoreById(storeId);
+    if (store == null || !mounted) return false;
+    _openStoreDetail(store);
+    return true;
+  }
+
+  Future<bool> _openStoreByName(String storeName) async {
+    final normalizedName = storeName.replaceAll(RegExp(r'\s+'), '');
+    DongNeuStore? cached;
+    for (final store in _stores) {
+      if (store.name.replaceAll(RegExp(r'\s+'), '') == normalizedName) {
+        cached = store;
+        break;
+      }
+    }
+    if (cached != null) {
+      _openStoreDetail(cached);
+      return true;
+    }
+
+    final store = await _fetchStoreByName(storeName);
+    if (store == null || !mounted) return false;
+    _openStoreDetail(store);
+    return true;
+  }
+
+  Future<void> _toggleSavedStore(String storeId) async {
+    if (!_isSupabaseConfigured) {
+      throw Exception('Supabase 설정이 필요해요.');
+    }
+    final session = Supabase.instance.client.auth.currentSession ?? _session;
+    if (session == null) {
+      throw Exception('로그인 후 저장할 수 있어요.');
+    }
+
+    final wasSaved = _savedStoreIds.contains(storeId);
+    if (wasSaved) {
+      await Supabase.instance.client
+          .from('saved_stores')
+          .delete()
+          .eq('user_id', session.user.id)
+          .eq('store_id', storeId);
+    } else {
+      await Supabase.instance.client.from('saved_stores').insert({
+        'user_id': session.user.id,
+        'store_id': storeId,
+      });
+    }
+
+    if (!mounted) return;
+    setState(() {
+      final next = Set<String>.from(_savedStoreIds);
+      if (wasSaved) {
+        next.remove(storeId);
+      } else {
+        next.add(storeId);
+      }
+      _savedStoreIds = next;
+    });
   }
 
   Future<List<AiRecommendation>> _requestAiRecommendations(String query) async {
@@ -253,6 +599,9 @@ class _DongNeuAppState extends State<DongNeuApp> {
         _accountRole = role;
         _screen = role == null ? AppScreen.userType : _screenForRole(role);
       });
+      if (role == _customerRole) {
+        await _refreshCustomerData();
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -280,6 +629,9 @@ class _DongNeuAppState extends State<DongNeuApp> {
       _accountRole = role;
       _screen = _screenForRole(role);
     });
+    if (role == _customerRole) {
+      await _refreshCustomerData();
+    }
   }
 
   Future<void> _signOut() async {
@@ -290,6 +642,9 @@ class _DongNeuAppState extends State<DongNeuApp> {
     setState(() {
       _session = null;
       _accountRole = null;
+      _stores = const [];
+      _savedStoreIds = const {};
+      _selectedStore = null;
       _screen = AppScreen.auth;
     });
   }
@@ -314,6 +669,16 @@ class _DongNeuAppState extends State<DongNeuApp> {
         onAiQueryChange: _setAiQuery,
         aiRecommendations: _aiRecommendations,
         onAiRecommend: _requestAiRecommendations,
+        stores: _stores,
+        selectedStore: _selectedStore,
+        savedStoreIds: _savedStoreIds,
+        isLoadingStores: _isLoadingStores,
+        storesError: _storesError,
+        onRefreshStores: _refreshCustomerData,
+        onStoreOpen: _openStoreDetail,
+        onStoreIdOpen: _openStoreById,
+        onStoreNameOpen: _openStoreByName,
+        onToggleSavedStore: _toggleSavedStore,
       ),
     );
   }
@@ -423,6 +788,16 @@ class _AppRouter extends StatelessWidget {
     required this.onAiQueryChange,
     required this.aiRecommendations,
     required this.onAiRecommend,
+    required this.stores,
+    required this.selectedStore,
+    required this.savedStoreIds,
+    required this.isLoadingStores,
+    required this.storesError,
+    required this.onRefreshStores,
+    required this.onStoreOpen,
+    required this.onStoreIdOpen,
+    required this.onStoreNameOpen,
+    required this.onToggleSavedStore,
   });
 
   final AppScreen screen;
@@ -438,6 +813,16 @@ class _AppRouter extends StatelessWidget {
   final ValueChanged<String> onAiQueryChange;
   final List<AiRecommendation> aiRecommendations;
   final Future<List<AiRecommendation>> Function(String query) onAiRecommend;
+  final List<DongNeuStore> stores;
+  final DongNeuStore? selectedStore;
+  final Set<String> savedStoreIds;
+  final bool isLoadingStores;
+  final String? storesError;
+  final Future<void> Function() onRefreshStores;
+  final ValueChanged<DongNeuStore> onStoreOpen;
+  final Future<bool> Function(String storeId) onStoreIdOpen;
+  final Future<bool> Function(String storeName) onStoreNameOpen;
+  final Future<void> Function(String storeId) onToggleSavedStore;
 
   @override
   Widget build(BuildContext context) {
@@ -454,7 +839,15 @@ class _AppRouter extends StatelessWidget {
         onOpen: onOpen,
         onLocationChange: onLocationChange,
       ),
-      AppScreen.home => HomeScreen(onOpen: onOpen, myLocation: myLocation),
+      AppScreen.home => HomeScreen(
+        onOpen: onOpen,
+        myLocation: myLocation,
+        stores: stores,
+        isLoadingStores: isLoadingStores,
+        storesError: storesError,
+        onRefreshStores: onRefreshStores,
+        onStoreOpen: onStoreOpen,
+      ),
       AppScreen.aiCondition => AiConditionConfirmationScreen(
         onOpen: onOpen,
         query: aiQuery,
@@ -468,13 +861,24 @@ class _AppRouter extends StatelessWidget {
         onOpen: onOpen,
         query: aiQuery,
         recommendations: aiRecommendations,
+        stores: stores,
+        onStoreNameOpen: onStoreNameOpen,
       ),
       AppScreen.filters => ManualSearchFiltersScreen(
         onOpen: onOpen,
         myLocation: myLocation,
       ),
-      AppScreen.storeDetail => StoreDetailScreen(onOpen: onOpen),
-      AppScreen.saved => SavedHistoryScreen(onOpen: onOpen),
+      AppScreen.storeDetail => StoreDetailScreen(
+        onOpen: onOpen,
+        store: selectedStore,
+        isSaved:
+            selectedStore != null && savedStoreIds.contains(selectedStore!.id),
+        onToggleSaved: onToggleSavedStore,
+      ),
+      AppScreen.saved => SavedHistoryScreen(
+        onOpen: onOpen,
+        onStoreIdOpen: onStoreIdOpen,
+      ),
       AppScreen.ownerRegistration => OwnerStoreRegistrationScreen(
         onOpen: onOpen,
       ),
@@ -1712,9 +2116,23 @@ class _LocationItem extends StatelessWidget {
 }
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, required this.onOpen, required this.myLocation});
+  const HomeScreen({
+    super.key,
+    required this.onOpen,
+    required this.myLocation,
+    required this.stores,
+    required this.isLoadingStores,
+    required this.storesError,
+    required this.onRefreshStores,
+    required this.onStoreOpen,
+  });
   final ValueChanged<AppScreen> onOpen;
   final String myLocation;
+  final List<DongNeuStore> stores;
+  final bool isLoadingStores;
+  final String? storesError;
+  final Future<void> Function() onRefreshStores;
+  final ValueChanged<DongNeuStore> onStoreOpen;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1873,7 +2291,14 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                _LocalPicksSection(onOpen: onOpen),
+                _LocalPicksSection(
+                  onOpen: onOpen,
+                  stores: stores,
+                  isLoading: isLoadingStores,
+                  error: storesError,
+                  onRefresh: onRefreshStores,
+                  onStoreOpen: onStoreOpen,
+                ),
               ],
             ),
           ),
@@ -2033,8 +2458,49 @@ class _SituationChip extends StatelessWidget {
 }
 
 class _LocalPicksSection extends StatelessWidget {
-  const _LocalPicksSection({required this.onOpen});
+  const _LocalPicksSection({
+    required this.onOpen,
+    required this.stores,
+    required this.isLoading,
+    required this.error,
+    required this.onRefresh,
+    required this.onStoreOpen,
+  });
   final ValueChanged<AppScreen> onOpen;
+  final List<DongNeuStore> stores;
+  final bool isLoading;
+  final String? error;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<DongNeuStore> onStoreOpen;
+
+  Color _colorForIndex(int index) {
+    return switch (index % 3) {
+      0 => _info,
+      1 => _success,
+      _ => _warning,
+    };
+  }
+
+  String _tagForStore(DongNeuStore store, int index) {
+    if (store.features.contains('착한가격업소') || store.tags.contains('가성비')) {
+      return '아껴U';
+    }
+    if (store.features.contains('새로생긴가게') || store.tags.contains('새로운')) {
+      return '새로워U';
+    }
+    if (index == 0) return '가까워U';
+    return '동네픽';
+  }
+
+  IconData _iconForCategory(String category) {
+    if (category.contains('카페')) return Icons.local_cafe_rounded;
+    if (category.contains('분식')) return Icons.local_dining_rounded;
+    if (category.contains('국수') || category.contains('면')) {
+      return Icons.ramen_dining_rounded;
+    }
+    return Icons.restaurant_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -2049,50 +2515,62 @@ class _LocalPicksSection extends StatelessWidget {
               children: [
                 Text('오늘의 동네픽', style: theme.textTheme.titleMedium),
                 _PrimaryButton(
-                  label: '전체보기',
+                  label: isLoading ? '불러오는 중' : '새로고침',
                   compact: true,
                   ghost: true,
-                  onPressed: () => onOpen(AppScreen.recommendations),
+                  onPressed: onRefresh,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 14),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              children: [
-                _LocalPickCard(
-                  tag: '가까워U',
-                  tagColor: _info,
-                  tagBg: _info.withOpacity(0.10),
-                  name: '궁동 칼국수',
-                  rating: '4.8',
-                  icon: Icons.ramen_dining_rounded,
-                  onTap: () => onOpen(AppScreen.storeDetail),
-                ),
-                _LocalPickCard(
-                  tag: '아껴U',
-                  tagColor: _success,
-                  tagBg: _success.withOpacity(0.10),
-                  name: '할머니 분식',
-                  rating: '4.5',
-                  icon: Icons.local_dining_rounded,
-                  onTap: () => onOpen(AppScreen.storeDetail),
-                ),
-                _LocalPickCard(
-                  tag: '새로워U',
-                  tagColor: _warning,
-                  tagBg: _warning.withOpacity(0.10),
-                  name: '카페 오렌지',
-                  rating: '4.9',
-                  icon: Icons.local_cafe_rounded,
-                  onTap: () => onOpen(AppScreen.storeDetail),
-                ),
-              ],
+          if (isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 28),
+              child: Center(child: CircularProgressIndicator(color: _primary)),
+            )
+          else if (error != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _EmptyStateCard(
+                icon: Icons.cloud_off_rounded,
+                title: '가게 목록을 불러오지 못했어요',
+                message: error!,
+                actionLabel: '다시 불러오기',
+                onAction: onRefresh,
+              ),
+            )
+          else if (stores.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _EmptyStateCard(
+                icon: Icons.storefront_rounded,
+                title: '등록된 가게가 없어요',
+                message: 'Supabase stores에 active 가게가 있으면 여기에 표시돼요.',
+                actionLabel: '새로고침',
+                onAction: onRefresh,
+              ),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: stores.take(8).toList().asMap().entries.map((entry) {
+                  final store = entry.value;
+                  final tagColor = _colorForIndex(entry.key);
+                  return _LocalPickCard(
+                    tag: _tagForStore(store, entry.key),
+                    tagColor: tagColor,
+                    tagBg: tagColor.withOpacity(0.10),
+                    name: store.name,
+                    rating: store.ratingLabel,
+                    icon: _iconForCategory(store.category),
+                    onTap: () => onStoreOpen(store),
+                  );
+                }).toList(),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -2391,10 +2869,24 @@ class Top3RecommendationsScreen extends StatelessWidget {
     required this.onOpen,
     required this.query,
     required this.recommendations,
+    required this.stores,
+    required this.onStoreNameOpen,
   });
   final ValueChanged<AppScreen> onOpen;
   final String query;
   final List<AiRecommendation> recommendations;
+  final List<DongNeuStore> stores;
+  final Future<bool> Function(String storeName) onStoreNameOpen;
+
+  DongNeuStore? _matchedStore(String storeName) {
+    final normalizedName = storeName.replaceAll(RegExp(r'\s+'), '');
+    for (final store in stores) {
+      if (store.name.replaceAll(RegExp(r'\s+'), '') == normalizedName) {
+        return store;
+      }
+    }
+    return null;
+  }
 
   Color _colorForTag(String tag) {
     if (tag.contains('가까')) return _info;
@@ -2473,19 +2965,32 @@ class Top3RecommendationsScreen extends StatelessWidget {
                   ...recommendations.asMap().entries.expand((entry) {
                     final item = entry.value;
                     final color = _colorForTag(item.cardType);
+                    final matchedStore = _matchedStore(item.storeName);
                     return [
                       _RecommendationCard(
                         rank: entry.key + 1,
                         tag: item.cardType,
                         name: item.storeName,
-                        rating: '-',
-                        price: 'AI 추천',
-                        category: '동네 맛집',
-                        distance: '조건 기반',
+                        rating: matchedStore?.ratingLabel ?? '-',
+                        price: matchedStore?.priceRange ?? 'AI 추천',
+                        category: matchedStore?.category ?? '동네 맛집',
+                        distance: matchedStore == null ? '매칭 대기' : '상세 가능',
                         reason: item.reason,
                         color: color,
                         icon: _iconForTag(item.cardType),
-                        onTap: () => onOpen(AppScreen.storeDetail),
+                        onTap: () async {
+                          final opened = await onStoreNameOpen(item.storeName);
+                          if (!opened && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '"${item.storeName}"을 stores에서 찾지 못했어요.',
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        },
                       ),
                       const SizedBox(height: 14),
                     ];
@@ -2966,16 +3471,152 @@ class _CheckCard extends StatelessWidget {
 }
 
 class StoreDetailScreen extends StatefulWidget {
-  const StoreDetailScreen({super.key, required this.onOpen});
+  const StoreDetailScreen({
+    super.key,
+    required this.onOpen,
+    required this.store,
+    required this.isSaved,
+    required this.onToggleSaved,
+  });
   final ValueChanged<AppScreen> onOpen;
+  final DongNeuStore? store;
+  final bool isSaved;
+  final Future<void> Function(String storeId) onToggleSaved;
+
   @override
   State<StoreDetailScreen> createState() => _StoreDetailScreenState();
 }
 
 class _StoreDetailScreenState extends State<StoreDetailScreen> {
+  bool _isLoadingMenus = false;
+  bool _isTogglingSaved = false;
+  List<StoreMenuItem> _menus = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMenus();
+  }
+
+  @override
+  void didUpdateWidget(covariant StoreDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.store?.id != widget.store?.id) {
+      _loadMenus();
+    }
+  }
+
+  IconData _iconForCategory(String category) {
+    if (category.contains('카페')) return Icons.local_cafe_rounded;
+    if (category.contains('분식')) return Icons.local_dining_rounded;
+    if (category.contains('국수') || category.contains('면')) {
+      return Icons.ramen_dining_rounded;
+    }
+    return Icons.restaurant_rounded;
+  }
+
+  Future<void> _loadMenus() async {
+    final store = widget.store;
+    if (store == null || !_isSupabaseConfigured) {
+      setState(() {
+        _menus = const [];
+        _isLoadingMenus = false;
+      });
+      return;
+    }
+
+    setState(() => _isLoadingMenus = true);
+    try {
+      final response = await Supabase.instance.client
+          .from('menu_items')
+          .select('id, name, description, price, is_representative')
+          .eq('store_id', store.id)
+          .order('is_representative', ascending: false)
+          .order('price');
+      if (!mounted) return;
+      setState(() {
+        _menus = (response as List)
+            .whereType<Map>()
+            .map(
+              (item) => StoreMenuItem.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .toList(growable: false);
+        _isLoadingMenus = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoadingMenus = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('메뉴를 불러오지 못했어요: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleSaved() async {
+    final store = widget.store;
+    if (store == null || _isTogglingSaved) return;
+
+    setState(() => _isTogglingSaved = true);
+    try {
+      await widget.onToggleSaved(store.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.isSaved ? '저장을 해제했어요.' : '가게를 저장했어요.'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$error'), behavior: SnackBarBehavior.floating),
+      );
+    } finally {
+      if (mounted) setState(() => _isTogglingSaved = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final store = widget.store;
+    if (store == null) {
+      return _PhoneFrame(
+        child: Column(
+          children: [
+            _TopBar(
+              title: '가게 상세',
+              onBack: () => widget.onOpen(AppScreen.home),
+            ),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: _EmptyStateCard(
+                    icon: Icons.storefront_rounded,
+                    title: '선택된 가게가 없어요',
+                    message: '홈이나 저장 목록에서 가게를 선택하면 상세 정보를 볼 수 있어요.',
+                    actionLabel: '홈으로 가기',
+                    onAction: () => widget.onOpen(AppScreen.home),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final visibleTags = [
+      store.category,
+      if (store.priceRange?.isNotEmpty == true) store.priceRange!,
+      ...store.tags.take(2),
+    ];
+
     return _PhoneFrame(
       child: Stack(
         children: [
@@ -2986,16 +3627,19 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                 children: [
                   Container(
                     height: 260,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [_tertiary, _primary],
+                        colors: [
+                          _tertiary.withOpacity(0.95),
+                          _primary.withOpacity(0.92),
+                        ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Icon(
-                        Icons.ramen_dining_rounded,
+                        _iconForCategory(store.category),
                         color: Colors.white,
                         size: 92,
                       ),
@@ -3006,7 +3650,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                     left: 16,
                     child: _CircleAction(
                       icon: Icons.arrow_back_rounded,
-                      onTap: () => widget.onOpen(AppScreen.recommendations),
+                      onTap: () => widget.onOpen(AppScreen.home),
                     ),
                   ),
                   Positioned(
@@ -3028,8 +3672,10 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                         ),
                         const SizedBox(width: 8),
                         _CircleAction(
-                          icon: Icons.bookmark_border_rounded,
-                          onTap: () => widget.onOpen(AppScreen.saved),
+                          icon: widget.isSaved
+                              ? Icons.bookmark_rounded
+                              : Icons.bookmark_border_rounded,
+                          onTap: _toggleSaved,
                         ),
                       ],
                     ),
@@ -3037,7 +3683,12 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                   Positioned(
                     left: 24,
                     bottom: 22,
-                    child: const _SmallTag(label: '가까워U', color: _info),
+                    child: _SmallTag(
+                      label: store.features.contains('착한가격업소') ? '아껴U' : '동네U',
+                      color: store.features.contains('착한가격업소')
+                          ? _success
+                          : _info,
+                    ),
                   ),
                 ],
               ),
@@ -3053,7 +3704,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                '궁동 칼국수',
+                                store.name,
                                 style: theme.textTheme.headlineSmall,
                               ),
                             ),
@@ -3065,7 +3716,10 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                                   size: 18,
                                 ),
                                 const SizedBox(width: 3),
-                                Text('4.8', style: theme.textTheme.labelLarge),
+                                Text(
+                                  store.ratingLabel,
+                                  style: theme.textTheme.labelLarge,
+                                ),
                               ],
                             ),
                           ],
@@ -3074,11 +3728,9 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: const [
-                            _Pill(label: '한식/국수'),
-                            _Pill(label: '도보 3분'),
-                            _Pill(label: '~8,000원'),
-                          ],
+                          children: visibleTags
+                              .map((tag) => _Pill(label: tag))
+                              .toList(growable: false),
                         ),
                         const SizedBox(height: 18),
                         const Divider(color: _alternate),
@@ -3099,7 +3751,9 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '현재 위치에서 가장 가깝고, 비 오는 날 따뜻한 멸치 육수가 일품이에요.',
+                          store.description?.isNotEmpty == true
+                              ? store.description!
+                              : 'Supabase stores에 등록된 가게 정보입니다.',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: _secondaryText,
                           ),
@@ -3118,7 +3772,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                       children: [
                         Text('대표 메뉴', style: theme.textTheme.titleMedium),
                         Text(
-                          '2개',
+                          '${_menus.length}개',
                           style: theme.textTheme.labelMedium?.copyWith(
                             color: _secondaryText,
                           ),
@@ -3126,35 +3780,59 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    const _MenuItemCard(
-                      icon: Icons.ramen_dining_rounded,
-                      name: '바지락 칼국수',
-                      desc: '시원한 바지락 육수와 직접 뽑은 면',
-                      price: '8,000원',
-                    ),
-                    const SizedBox(height: 10),
-                    const _MenuItemCard(
-                      icon: Icons.lunch_dining_rounded,
-                      name: '김치 만두',
-                      desc: '국수와 함께 먹기 좋은 매콤한 만두',
-                      price: '5,000원',
-                    ),
+                    if (_isLoadingMenus)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 18),
+                        child: Center(
+                          child: CircularProgressIndicator(color: _primary),
+                        ),
+                      )
+                    else if (_menus.isEmpty)
+                      _EmptyStateCard(
+                        icon: Icons.restaurant_menu_rounded,
+                        title: '등록된 메뉴가 없어요',
+                        message: 'menu_items에 메뉴가 추가되면 여기에 표시돼요.',
+                        actionLabel: '다시 불러오기',
+                        onAction: _loadMenus,
+                      )
+                    else
+                      ..._menus.expand((menu) {
+                        return [
+                          _MenuItemCard(
+                            icon: menu.isRepresentative
+                                ? Icons.restaurant_menu_rounded
+                                : Icons.local_dining_rounded,
+                            name: menu.name,
+                            desc: menu.description?.isNotEmpty == true
+                                ? menu.description!
+                                : menu.isRepresentative
+                                ? '대표 메뉴'
+                                : '일반 메뉴',
+                            price: _formatWon(menu.price),
+                          ),
+                          const SizedBox(height: 10),
+                        ];
+                      }),
                     const SizedBox(height: 20),
                     _SurfaceCard(
                       color: _surfaceVariant.withOpacity(0.50),
-                      child: const Column(
+                      child: Column(
                         children: [
                           _StoreInfoRow(
                             icon: Icons.schedule_rounded,
-                            text: '매일 10:30 - 21:00',
+                            text: store.openingHours?.isNotEmpty == true
+                                ? store.openingHours!
+                                : '운영시간 정보 없음',
                           ),
                           _StoreInfoRow(
                             icon: Icons.payments_rounded,
-                            text: '1인 평균 8,000원',
+                            text: store.priceRange?.isNotEmpty == true
+                                ? store.priceRange!
+                                : '가격 정보 없음',
                           ),
                           _StoreInfoRow(
                             icon: Icons.info_outlined,
-                            text: '대전 유성구 궁동 대학로 근처',
+                            text: store.address,
                             bottom: false,
                           ),
                         ],
@@ -3176,10 +3854,17 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          onPressed: () => widget.onOpen(AppScreen.saved),
-                          icon: const Icon(Icons.bookmark_border_rounded),
+                          onPressed: _isTogglingSaved ? null : _toggleSaved,
+                          icon: Icon(
+                            widget.isSaved
+                                ? Icons.bookmark_rounded
+                                : Icons.bookmark_border_rounded,
+                          ),
                         ),
-                        Text('저장', style: theme.textTheme.labelSmall),
+                        Text(
+                          widget.isSaved ? '저장됨' : '저장',
+                          style: theme.textTheme.labelSmall,
+                        ),
                       ],
                     ),
                   ),
@@ -3292,8 +3977,13 @@ class _StoreInfoRow extends StatelessWidget {
 }
 
 class SavedHistoryScreen extends StatefulWidget {
-  const SavedHistoryScreen({super.key, required this.onOpen});
+  const SavedHistoryScreen({
+    super.key,
+    required this.onOpen,
+    required this.onStoreIdOpen,
+  });
   final ValueChanged<AppScreen> onOpen;
+  final Future<bool> Function(String storeId) onStoreIdOpen;
 
   @override
   State<SavedHistoryScreen> createState() => _SavedHistoryScreenState();
@@ -3301,6 +3991,84 @@ class SavedHistoryScreen extends StatefulWidget {
 
 class _SavedHistoryScreenState extends State<SavedHistoryScreen> {
   bool _showSavedStores = true;
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _savedStores = const [];
+  List<Map<String, dynamic>> _recommendationHistory = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedAndHistory();
+  }
+
+  String _formatDate(String? value) {
+    if (value == null) return '날짜 없음';
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return value;
+    return '${parsed.month}/${parsed.day} ${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}';
+  }
+
+  int _recommendationCount(Map<String, dynamic> item) {
+    final aiResponse = item['ai_response'];
+    if (aiResponse is Map) {
+      final recommendations = aiResponse['recommendations'];
+      if (recommendations is List) return recommendations.length;
+      final flaskResponse = aiResponse['flask_response'];
+      if (flaskResponse is Map) {
+        final data = flaskResponse['data'];
+        if (data is Map && data['recommendations'] is List) {
+          return (data['recommendations'] as List).length;
+        }
+      }
+    }
+    return 0;
+  }
+
+  Future<void> _loadSavedAndHistory() async {
+    if (!_isSupabaseConfigured ||
+        Supabase.instance.client.auth.currentSession == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final responses = await Future.wait([
+        Supabase.instance.client
+            .from('saved_stores')
+            .select(
+              'id, created_at, stores(id, name, category, rating, price_range)',
+            )
+            .order('created_at', ascending: false),
+        Supabase.instance.client
+            .from('recommendation_history')
+            .select('id, query, created_at, ai_response')
+            .order('created_at', ascending: false),
+      ]);
+
+      if (!mounted) return;
+      setState(() {
+        _savedStores = (responses[0] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false);
+        _recommendationHistory = (responses[1] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false);
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('저장/추천 기록을 불러오지 못했어요: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3321,16 +4089,8 @@ class _SavedHistoryScreenState extends State<SavedHistoryScreen> {
                           Text('저장', style: theme.textTheme.headlineSmall),
                           const Spacer(),
                           IconButton(
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('백엔드 연동 후 제공될 기능입니다 🚀'),
-                                  behavior: SnackBarBehavior.floating,
-                                  duration: Duration(seconds: 1),
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.settings_rounded),
+                            onPressed: _loadSavedAndHistory,
+                            icon: const Icon(Icons.refresh_rounded),
                           ),
                         ],
                       ),
@@ -3367,10 +4127,20 @@ class _SavedHistoryScreenState extends State<SavedHistoryScreen> {
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
-                if (_showSavedStores) ...[
+                if (_isLoading) ...[
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 80),
+                      child: CircularProgressIndicator(color: _primary),
+                    ),
+                  ),
+                ] else if (_showSavedStores) ...[
                   Row(
                     children: [
-                      Text('총 2곳', style: theme.textTheme.titleMedium),
+                      Text(
+                        '총 ${_savedStores.length}곳',
+                        style: theme.textTheme.titleMedium,
+                      ),
                       const Spacer(),
                       const Icon(
                         Icons.sort_rounded,
@@ -3387,62 +4157,62 @@ class _SavedHistoryScreenState extends State<SavedHistoryScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  _SavedStoreCard(
-                    icon: Icons.ramen_dining_rounded,
-                    name: '궁동 칼국수',
-                    rating: '4.8',
-                    category: '한식/국수',
-                    distance: '도보 3분',
-                    price: '~8,000원',
-                    onTap: () => widget.onOpen(AppScreen.storeDetail),
-                  ),
-                  const SizedBox(height: 12),
-                  _SavedStoreCard(
-                    icon: Icons.local_dining_rounded,
-                    name: '할머니 분식',
-                    rating: '4.5',
-                    category: '분식',
-                    distance: '도보 6분',
-                    price: '~7,000원',
-                    onTap: () => widget.onOpen(AppScreen.storeDetail),
-                  ),
+                  if (_savedStores.isEmpty)
+                    _EmptyStateCard(
+                      icon: Icons.bookmark_border_rounded,
+                      title: '저장한 가게가 없어요',
+                      message: '마음에 드는 가게를 저장하면 여기에 모아볼 수 있어요.',
+                      actionLabel: '추천 받기',
+                      onAction: () => widget.onOpen(AppScreen.aiChat),
+                    )
+                  else
+                    ..._savedStores.map((item) {
+                      final store = item['stores'];
+                      final storeMap = store is Map
+                          ? Map<String, dynamic>.from(store)
+                          : <String, dynamic>{};
+                      return _SavedStoreCard(
+                        icon: Icons.restaurant_rounded,
+                        name: storeMap['name'] as String? ?? '이름 없는 가게',
+                        rating: (storeMap['rating'] ?? '-').toString(),
+                        category: storeMap['category'] as String? ?? '카테고리 없음',
+                        distance: _formatDate(item['created_at'] as String?),
+                        price: storeMap['price_range'] as String? ?? '가격 정보 없음',
+                        onTap: () async {
+                          final storeId = storeMap['id']?.toString();
+                          if (storeId == null || storeId.isEmpty) return;
+                          final opened = await widget.onStoreIdOpen(storeId);
+                          if (!opened && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('가게 상세를 불러오지 못했어요.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        },
+                      );
+                    }),
                 ] else ...[
                   Text('최근 추천 기록', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 12),
-                  const _HistoryItem(
-                    query: '가성비 혼밥 추천',
-                    date: '오늘 저녁',
-                    result: '3곳 추천',
-                  ),
-                  const _HistoryItem(
-                    query: '데이트하기 좋은 카페',
-                    date: '어제',
-                    result: '3곳 추천',
-                  ),
-                  const SizedBox(height: 20),
-                  _SurfaceCard(
-                    color: _surfaceVariant.withOpacity(0.50),
-                    child: Column(
-                      children: [
-                        const Icon(
-                          Icons.auto_awesome_rounded,
-                          color: _primary,
-                          size: 30,
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          '새로운 추천을 받아보세요',
-                          style: theme.textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: 12),
-                        _PrimaryButton(
-                          label: '추천 받기',
-                          compact: true,
-                          onPressed: () => widget.onOpen(AppScreen.aiChat),
-                        ),
-                      ],
-                    ),
-                  ),
+                  if (_recommendationHistory.isEmpty)
+                    _EmptyStateCard(
+                      icon: Icons.history_rounded,
+                      title: '추천 기록이 없어요',
+                      message: 'AI 맞춤 검색을 사용하면 추천 기록이 저장돼요.',
+                      actionLabel: '추천 받기',
+                      onAction: () => widget.onOpen(AppScreen.aiChat),
+                    )
+                  else
+                    ..._recommendationHistory.map((item) {
+                      final count = _recommendationCount(item);
+                      return _HistoryItem(
+                        query: item['query'] as String? ?? '추천 요청',
+                        date: _formatDate(item['created_at'] as String?),
+                        result: count == 0 ? '추천 결과 저장됨' : '$count곳 추천',
+                      );
+                    }),
                 ],
               ],
             ),
@@ -3512,6 +4282,49 @@ class _SavedStoreCard extends StatelessWidget {
   }
 }
 
+class _EmptyStateCard extends StatelessWidget {
+  const _EmptyStateCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _SurfaceCard(
+      color: _surfaceVariant.withOpacity(0.50),
+      child: Column(
+        children: [
+          Icon(icon, color: _primary, size: 30),
+          const SizedBox(height: 10),
+          Text(title, style: theme.textTheme.titleSmall),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          _PrimaryButton(
+            label: actionLabel,
+            compact: true,
+            onPressed: onAction,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HistoryItem extends StatelessWidget {
   const _HistoryItem({
     required this.query,
@@ -3551,9 +4364,270 @@ class _HistoryItem extends StatelessWidget {
   }
 }
 
-class OwnerStoreRegistrationScreen extends StatelessWidget {
+class OwnerStoreRegistrationScreen extends StatefulWidget {
   const OwnerStoreRegistrationScreen({super.key, required this.onOpen});
   final ValueChanged<AppScreen> onOpen;
+
+  @override
+  State<OwnerStoreRegistrationScreen> createState() =>
+      _OwnerStoreRegistrationScreenState();
+}
+
+class _OwnerStoreRegistrationScreenState
+    extends State<OwnerStoreRegistrationScreen> {
+  final _storeNameController = TextEditingController();
+  final _categoryController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _detailAddressController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _representativeMenuController = TextEditingController();
+  final _representativePriceController = TextEditingController();
+  final List<_MenuDraft> _additionalMenus = [];
+  AddressSearchResult? _selectedAddress;
+  bool _isSearchingAddress = false;
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _storeNameController.dispose();
+    _categoryController.dispose();
+    _addressController.dispose();
+    _detailAddressController.dispose();
+    _descriptionController.dispose();
+    _representativeMenuController.dispose();
+    _representativePriceController.dispose();
+    for (final menu in _additionalMenus) {
+      menu.dispose();
+    }
+    super.dispose();
+  }
+
+  int? _parsePrice(String value) {
+    final normalized = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (normalized.isEmpty) return null;
+    return int.tryParse(normalized);
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  Future<List<AddressSearchResult>> _searchKakaoAddress(String query) async {
+    if (_kakaoRestApiKey.isEmpty) {
+      throw Exception('KAKAO_REST_API_KEY가 설정되지 않았어요.');
+    }
+
+    final uri = Uri.https('dapi.kakao.com', '/v2/local/search/address.json', {
+      'query': query,
+      'size': '10',
+    });
+    final response = await http
+        .get(uri, headers: {'Authorization': 'KakaoAK $_kakaoRestApiKey'})
+        .timeout(const Duration(seconds: 12));
+
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('주소 검색 API 요청에 실패했어요.');
+    }
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('주소 검색 응답 형식이 올바르지 않아요.');
+    }
+
+    final documents = decoded['documents'];
+    if (documents is! List) return const [];
+    return documents
+        .whereType<Map>()
+        .map(
+          (item) =>
+              AddressSearchResult.fromKakao(Map<String, dynamic>.from(item)),
+        )
+        .where((item) => item.address != '주소 정보 없음')
+        .toList(growable: false);
+  }
+
+  Future<void> _openAddressSearch() async {
+    final query = _addressController.text.trim();
+    if (query.isEmpty) {
+      _showMessage('검색할 주소나 건물명을 입력해주세요.');
+      return;
+    }
+
+    setState(() => _isSearchingAddress = true);
+    try {
+      final results = await _searchKakaoAddress(query);
+      if (!mounted) return;
+      if (results.isEmpty) {
+        _showMessage('검색 결과가 없어요. 다른 주소로 다시 검색해주세요.');
+        return;
+      }
+
+      final selected = await showModalBottomSheet<AddressSearchResult>(
+        context: context,
+        backgroundColor: _surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (context) {
+          return SafeArea(
+            child: ListView.separated(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              itemCount: results.length + 1,
+              separatorBuilder: (context, index) =>
+                  const Divider(color: _alternate),
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return Text(
+                    '주소 선택',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  );
+                }
+                final result = results[index - 1];
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(result.displayAddress),
+                  subtitle: result.roadAddress != null
+                      ? Text(result.address)
+                      : null,
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.pop(context, result),
+                );
+              },
+            ),
+          );
+        },
+      );
+
+      if (selected == null || !mounted) return;
+      setState(() {
+        _selectedAddress = selected;
+        _addressController.text = selected.displayAddress;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() => _isSearchingAddress = false);
+      }
+    }
+  }
+
+  void _addAdditionalMenu() {
+    setState(() => _additionalMenus.add(_MenuDraft()));
+  }
+
+  void _removeAdditionalMenu(int index) {
+    final removed = _additionalMenus.removeAt(index);
+    removed.dispose();
+    setState(() {});
+  }
+
+  Future<void> _saveStore() async {
+    if (_isSaving) return;
+    if (!_isSupabaseConfigured) {
+      _showMessage('Supabase 설정이 필요해요.');
+      return;
+    }
+
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) {
+      _showMessage('로그인 후 가게를 등록할 수 있어요.');
+      return;
+    }
+
+    final storeName = _storeNameController.text.trim();
+    final category = _categoryController.text.trim();
+    final address = _addressController.text.trim();
+    final representativeMenu = _representativeMenuController.text.trim();
+    final representativePrice = _parsePrice(
+      _representativePriceController.text,
+    );
+
+    if (storeName.isEmpty) {
+      _showMessage('가게 이름을 입력해주세요.');
+      return;
+    }
+    if (category.isEmpty) {
+      _showMessage('업종 카테고리를 입력해주세요.');
+      return;
+    }
+    if (address.isEmpty || _selectedAddress == null) {
+      _showMessage('주소 찾기 API로 가게 주소를 선택해주세요.');
+      return;
+    }
+    if (representativeMenu.isEmpty || representativePrice == null) {
+      _showMessage('대표 메뉴명과 가격을 입력해주세요.');
+      return;
+    }
+
+    final menuRows = <Map<String, dynamic>>[
+      {
+        'name': representativeMenu,
+        'price': representativePrice,
+        'is_representative': true,
+      },
+    ];
+
+    for (final menu in _additionalMenus) {
+      final name = menu.nameController.text.trim();
+      final priceText = menu.priceController.text.trim();
+      if (name.isEmpty && priceText.isEmpty) continue;
+      final price = _parsePrice(priceText);
+      if (name.isEmpty || price == null) {
+        _showMessage('추가 메뉴의 메뉴명과 가격을 모두 입력해주세요.');
+        return;
+      }
+      menuRows.add({'name': name, 'price': price, 'is_representative': false});
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final fullAddress = [
+        address,
+        _detailAddressController.text.trim(),
+      ].where((value) => value.isNotEmpty).join(' ');
+
+      final store = await Supabase.instance.client
+          .from('stores')
+          .insert({
+            'owner_id': session.user.id,
+            'name': storeName,
+            'category': category,
+            'address': fullAddress,
+            'lat': _selectedAddress?.lat,
+            'lng': _selectedAddress?.lng,
+            'description': _descriptionController.text.trim().isEmpty
+                ? null
+                : _descriptionController.text.trim(),
+          })
+          .select('id')
+          .single();
+
+      final storeId = store['id'] as String;
+      await Supabase.instance.client
+          .from('menu_items')
+          .insert(
+            menuRows.map((menu) => {...menu, 'store_id': storeId}).toList(),
+          );
+
+      if (!mounted) return;
+      _showMessage('가게와 메뉴를 등록했어요.');
+      widget.onOpen(AppScreen.promotion);
+    } on PostgrestException catch (error) {
+      if (!mounted) return;
+      _showMessage('가게 저장에 실패했어요: ${error.message}');
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage('가게 저장 중 문제가 생겼어요: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -3562,7 +4636,7 @@ class OwnerStoreRegistrationScreen extends StatelessWidget {
         children: [
           _TopBar(
             title: '우리 가게 등록하기',
-            onBack: () => onOpen(AppScreen.userType),
+            onBack: () => widget.onOpen(AppScreen.userType),
           ),
           Expanded(
             child: ListView(
@@ -3599,47 +4673,76 @@ class OwnerStoreRegistrationScreen extends StatelessWidget {
                 const SizedBox(height: 24),
                 const _SectionHeader(title: '가게 기본 정보'),
                 const SizedBox(height: 12),
-                const _TextFieldBox(
+                _TextFieldBox(
                   label: '가게 이름',
                   hint: '동네유 식당',
                   icon: Icons.storefront_rounded,
+                  controller: _storeNameController,
+                  textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 14),
-                const _TextFieldBox(
+                _TextFieldBox(
                   label: '업종 카테고리',
                   hint: '한식, 일식, 카페 등',
                   icon: Icons.category_rounded,
+                  controller: _categoryController,
+                  textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 14),
-                const _TextFieldBox(
+                _TextFieldBox(
                   label: '가게 주소',
-                  hint: '주소를 검색하세요',
+                  hint: '주소나 건물명을 입력하고 검색',
                   icon: Icons.location_on_outlined,
-                  trailing: Icons.search_rounded,
+                  trailing: _isSearchingAddress
+                      ? Icons.hourglass_empty_rounded
+                      : Icons.search_rounded,
+                  controller: _addressController,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _openAddressSearch(),
+                  onTrailingTap: _isSearchingAddress
+                      ? null
+                      : _openAddressSearch,
+                ),
+                const SizedBox(height: 14),
+                _TextFieldBox(
+                  label: '상세 주소',
+                  hint: '층, 호수 등 상세 주소',
+                  icon: Icons.apartment_rounded,
+                  controller: _detailAddressController,
+                  textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  '정확한 위치는 추천 품질과 길찾기에 사용됩니다.',
+                  _selectedAddress == null
+                      ? '정확한 위치는 추천 품질과 길찾기에 사용됩니다.'
+                      : '주소 선택 완료: ${_selectedAddress!.displayAddress}',
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(height: 26),
                 const _SectionHeader(title: '대표 메뉴'),
                 const SizedBox(height: 12),
-                const _MenuInputRow(),
+                _MenuInputRow(
+                  nameController: _representativeMenuController,
+                  priceController: _representativePriceController,
+                  representative: true,
+                ),
+                ..._additionalMenus.asMap().entries.map((entry) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: _MenuInputRow(
+                      nameController: entry.value.nameController,
+                      priceController: entry.value.priceController,
+                      representative: false,
+                      onRemove: () => _removeAdditionalMenu(entry.key),
+                    ),
+                  );
+                }),
                 const SizedBox(height: 12),
                 _PrimaryButton(
                   label: '메뉴 추가하기',
                   outline: true,
                   icon: Icons.add_rounded,
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('백엔드 연동 후 제공될 기능입니다 🚀'),
-                        behavior: SnackBarBehavior.floating,
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                  },
+                  onPressed: _addAdditionalMenu,
                 ),
                 const SizedBox(height: 26),
                 const _SectionHeader(title: '가게 특징 (AI 홍보용)'),
@@ -3662,18 +4765,19 @@ class OwnerStoreRegistrationScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
-                const _TextFieldBox(
+                _TextFieldBox(
                   label: '추가 설명',
                   hint: '우리 가게만의 특별함을 적어주세요',
                   icon: Icons.edit_note_rounded,
+                  controller: _descriptionController,
                 ),
               ],
             ),
           ),
           _BottomActionBar(
             child: _PrimaryButton(
-              label: '다음 단계',
-              onPressed: () => onOpen(AppScreen.promotion),
+              label: _isSaving ? '저장 중...' : '가게 등록하기',
+              onPressed: _isSaving ? () {} : _saveStore,
             ),
           ),
         ],
@@ -3683,41 +4787,274 @@ class OwnerStoreRegistrationScreen extends StatelessWidget {
 }
 
 class _MenuInputRow extends StatelessWidget {
-  const _MenuInputRow();
+  const _MenuInputRow({
+    required this.nameController,
+    required this.priceController,
+    required this.representative,
+    this.onRemove,
+  });
+
+  final TextEditingController nameController;
+  final TextEditingController priceController;
+  final bool representative;
+  final VoidCallback? onRemove;
+
   @override
   Widget build(BuildContext context) {
     return _SurfaceCard(
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          const _IconTile(icon: Icons.restaurant_menu_rounded),
+          _IconTile(
+            icon: representative
+                ? Icons.restaurant_menu_rounded
+                : Icons.add_circle_outline_rounded,
+          ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              '대표 메뉴명',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: _accentText),
+            child: TextField(
+              controller: nameController,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                hintText: representative ? '대표 메뉴명' : '추가 메뉴명',
+                border: InputBorder.none,
+                hintStyle: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: _accentText),
+              ),
             ),
           ),
           SizedBox(
             width: 92,
-            child: Text(
-              '가격',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: _accentText),
+            child: TextField(
+              controller: priceController,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                hintText: '가격',
+                border: InputBorder.none,
+                hintStyle: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: _accentText),
+              ),
             ),
           ),
+          if (onRemove != null) ...[
+            const SizedBox(width: 6),
+            IconButton(
+              onPressed: onRemove,
+              icon: const Icon(Icons.close_rounded, color: _secondaryText),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class AiPromotionHelperScreen extends StatelessWidget {
+class AiPromotionHelperScreen extends StatefulWidget {
   const AiPromotionHelperScreen({super.key, required this.onOpen});
   final ValueChanged<AppScreen> onOpen;
+
+  @override
+  State<AiPromotionHelperScreen> createState() =>
+      _AiPromotionHelperScreenState();
+}
+
+class _AiPromotionHelperScreenState extends State<AiPromotionHelperScreen> {
+  final _eventController = TextEditingController();
+  final _keywordsController = TextEditingController();
+  List<DongNeuStore> _ownerStores = const [];
+  List<Map<String, dynamic>> _promotionHistory = const [];
+  String? _selectedStoreId;
+  String _selectedTone = '친절한';
+  String? _generatedCopy;
+  bool _isLoading = true;
+  bool _isGenerating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOwnerData();
+  }
+
+  @override
+  void dispose() {
+    _eventController.dispose();
+    _keywordsController.dispose();
+    super.dispose();
+  }
+
+  String _formatDate(String? value) {
+    if (value == null) return '날짜 없음';
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return value;
+    return '${parsed.month}/${parsed.day} ${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}';
+  }
+
+  List<String> _keywordList() {
+    return _keywordsController.text
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  DongNeuStore? get _selectedStore {
+    for (final store in _ownerStores) {
+      if (store.id == _selectedStoreId) return store;
+    }
+    return _ownerStores.isEmpty ? null : _ownerStores.first;
+  }
+
+  Future<void> _loadOwnerData() async {
+    if (!_isSupabaseConfigured ||
+        Supabase.instance.client.auth.currentSession == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final responses = await Future.wait([
+        Supabase.instance.client
+            .from('stores')
+            .select(_storeSelectColumns)
+            .order('created_at', ascending: false),
+        Supabase.instance.client
+            .from('promotion_history')
+            .select(
+              'id, store_id, promotion_type, event_text, tone, generated_copy, created_at',
+            )
+            .order('created_at', ascending: false)
+            .limit(10),
+      ]);
+      if (!mounted) return;
+      final stores = (responses[0] as List)
+          .whereType<Map>()
+          .map((item) => DongNeuStore.fromJson(Map<String, dynamic>.from(item)))
+          .where((store) => store.id.isNotEmpty)
+          .toList(growable: false);
+      setState(() {
+        _ownerStores = stores;
+        _selectedStoreId =
+            _selectedStoreId ?? (stores.isEmpty ? null : stores.first.id);
+        _promotionHistory = (responses[1] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false);
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('홍보 데이터를 불러오지 못했어요: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _generatePromotionCopy() async {
+    if (_isGenerating) return;
+    final session = Supabase.instance.client.auth.currentSession;
+    final store = _selectedStore;
+    final eventText = _eventController.text.trim();
+    final keywords = _keywordList();
+
+    if (!_isSupabaseConfigured || session == null) {
+      _showMessage('로그인 후 사용할 수 있어요.');
+      return;
+    }
+    if (store == null) {
+      _showMessage('먼저 사장님 계정으로 가게를 등록해주세요.');
+      return;
+    }
+    if (eventText.isEmpty) {
+      _showMessage('홍보할 메뉴나 이벤트를 입력해주세요.');
+      return;
+    }
+
+    setState(() => _isGenerating = true);
+    try {
+      final input = [
+        '가게명: ${store.name}',
+        '업종: ${store.category}',
+        '홍보 내용: $eventText',
+        if (keywords.isNotEmpty) '키워드: ${keywords.join(', ')}',
+        '문구 분위기: $_selectedTone',
+      ].join('\n');
+
+      final response = await http
+          .post(
+            Uri.parse('$_flaskAiBaseUrl/api/ai'),
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({'input': input, 'role': 'owner'}),
+          )
+          .timeout(const Duration(seconds: 35));
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('AI 서버 응답 형식이 올바르지 않아요.');
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(decoded['message'] as String? ?? 'AI 요청에 실패했어요.');
+      }
+      if (decoded['status'] != 'success') {
+        throw Exception(decoded['message'] as String? ?? '홍보 문구 생성에 실패했어요.');
+      }
+
+      final data = decoded['data'];
+      final marketing = data is Map<String, dynamic> ? data['marketing'] : null;
+      if (marketing is! Map) {
+        throw Exception('홍보 문구 응답을 해석하지 못했어요.');
+      }
+      final postText = (marketing['post_text'] as String?)?.trim();
+      final hashtags = marketing['hashtags'] is List
+          ? (marketing['hashtags'] as List)
+                .map((item) => item.toString().trim())
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false)
+          : const <String>[];
+      if (postText == null || postText.isEmpty) {
+        throw Exception('생성된 홍보 문구가 비어 있어요.');
+      }
+
+      final generatedCopy = [
+        postText,
+        if (hashtags.isNotEmpty) '',
+        if (hashtags.isNotEmpty) hashtags.join(' '),
+      ].join('\n');
+
+      await Supabase.instance.client.from('promotion_history').insert({
+        'owner_id': session.user.id,
+        'store_id': store.id,
+        'promotion_type': 'sns',
+        'event_text': eventText,
+        'keywords': keywords,
+        'tone': _selectedTone,
+        'generated_copy': generatedCopy,
+      });
+
+      if (!mounted) return;
+      setState(() => _generatedCopy = generatedCopy);
+      _showMessage('홍보 문구를 생성하고 기록에 저장했어요.');
+      await _loadOwnerData();
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -3726,18 +5063,10 @@ class AiPromotionHelperScreen extends StatelessWidget {
         children: [
           _TopBar(
             title: 'AI 홍보 도우미',
-            onBack: () => onOpen(AppScreen.ownerRegistration),
+            onBack: () => widget.onOpen(AppScreen.ownerRegistration),
             trailing: _IconButton(
               icon: Icons.history_rounded,
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('백엔드 연동 후 제공될 기능입니다 🚀'),
-                    behavior: SnackBarBehavior.floating,
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-              },
+              onPressed: _loadOwnerData,
             ),
           ),
           Expanded(
@@ -3784,11 +5113,13 @@ class AiPromotionHelperScreen extends StatelessWidget {
                 const SizedBox(height: 24),
                 const _SectionHeader(title: '필요한 홍보물을 선택해U'),
                 const SizedBox(height: 12),
-                const _FeatureCard(
+                _FeatureCard(
                   icon: Icons.campaign_rounded,
                   title: 'SNS 홍보 문구',
                   subtitle: '인스타그램, 당근마켓용 감성 문구',
-                  status: '최근 생성: 2일 전',
+                  status: _promotionHistory.isEmpty
+                      ? '생성 기록 없음'
+                      : '최근 생성: ${_formatDate(_promotionHistory.first['created_at'] as String?)}',
                   action: '작성하기',
                 ),
                 const _FeatureCard(
@@ -3813,16 +5144,55 @@ class AiPromotionHelperScreen extends StatelessWidget {
                     children: [
                       const _SectionHeader(title: '홍보 정보 입력'),
                       const SizedBox(height: 16),
-                      const _TextFieldBox(
+                      if (_isLoading)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(18),
+                            child: CircularProgressIndicator(color: _primary),
+                          ),
+                        )
+                      else if (_ownerStores.isEmpty)
+                        _EmptyStateCard(
+                          icon: Icons.storefront_rounded,
+                          title: '등록된 내 가게가 없어요',
+                          message: '우리 가게 등록하기에서 가게를 먼저 등록해주세요.',
+                          actionLabel: '가게 등록하기',
+                          onAction: () =>
+                              widget.onOpen(AppScreen.ownerRegistration),
+                        )
+                      else
+                        DropdownButtonFormField<String>(
+                          value: _selectedStoreId,
+                          decoration: const InputDecoration(
+                            labelText: '홍보할 가게',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: _ownerStores
+                              .map(
+                                (store) => DropdownMenuItem(
+                                  value: store.id,
+                                  child: Text(store.name),
+                                ),
+                              )
+                              .toList(growable: false),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() => _selectedStoreId = value);
+                          },
+                        ),
+                      const SizedBox(height: 16),
+                      _TextFieldBox(
                         label: '홍보할 메뉴/이벤트',
                         hint: '예: 신메뉴 들기름 막국수 출시',
                         icon: Icons.restaurant_menu_rounded,
+                        controller: _eventController,
                       ),
                       const SizedBox(height: 16),
-                      const _TextFieldBox(
+                      _TextFieldBox(
                         label: '강조하고 싶은 키워드',
-                        hint: '예: 고소함, 로컬 식재료, 할머니 손맛',
+                        hint: '쉼표로 구분: 고소함, 로컬 식재료, 할머니 손맛',
                         icon: Icons.sell_rounded,
+                        controller: _keywordsController,
                       ),
                     ],
                   ),
@@ -3833,28 +5203,74 @@ class AiPromotionHelperScreen extends StatelessWidget {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: const [
-                    _Pill(label: '친절한', selected: true),
-                    _Pill(label: '재치있는'),
-                    _Pill(label: '감성적인'),
-                    _Pill(label: '짧고 강한'),
-                  ],
+                  children: ['친절한', '재치있는', '감성적인', '짧고 강한']
+                      .map(
+                        (tone) => _Pill(
+                          label: tone,
+                          selected: _selectedTone == tone,
+                          onTap: () => setState(() => _selectedTone = tone),
+                        ),
+                      )
+                      .toList(growable: false),
                 ),
                 const SizedBox(height: 18),
                 _PrimaryButton(
-                  label: '문구 생성하기',
+                  label: _isGenerating ? '생성 중...' : '문구 생성하기',
                   icon: Icons.auto_awesome_rounded,
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('백엔드 연동 후 제공될 기능입니다 🚀'),
-                        behavior: SnackBarBehavior.floating,
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                  },
+                  onPressed: _isGenerating ? () {} : _generatePromotionCopy,
                 ),
                 const SizedBox(height: 16),
+                if (_generatedCopy?.isNotEmpty == true) ...[
+                  _SurfaceCard(
+                    color: _primary.withOpacity(0.06),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('생성된 홍보 문구', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 10),
+                        Text(
+                          _generatedCopy!,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (_promotionHistory.isNotEmpty) ...[
+                  const _SectionHeader(title: '최근 생성 기록'),
+                  const SizedBox(height: 12),
+                  ..._promotionHistory.take(3).map((item) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _SurfaceCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item['event_text'] as String? ?? '홍보 문구',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _formatDate(item['created_at'] as String?),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              item['generated_copy'] as String? ?? '',
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                ],
                 _SurfaceCard(
                   color: _surfaceVariant.withOpacity(0.50),
                   child: Row(
