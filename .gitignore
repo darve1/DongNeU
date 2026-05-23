@@ -33,6 +33,12 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local backend secrets
+backend/flask_ai/.env
+backend/flask_ai/.venv/
+backend/flask_ai/__pycache__/
+backend/flask_ai/.pytest_cache/
+
 # Symbolication related
 app.*.symbols
 
