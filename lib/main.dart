@@ -885,8 +885,10 @@ class _LocalPickCard extends StatelessWidget {
 }
 
 class AiConditionConfirmationScreen extends StatelessWidget {
-  const AiConditionConfirmationScreen({super.key, required this.onOpen});
+  const AiConditionConfirmationScreen({super.key, required this.onOpen, this.query = "충남대 근처에서 혼자 먹기 좋고 만 원 이하로 든든한 저녁 추천해줘"});
   final ValueChanged<AppScreen> onOpen;
+  final String query;
+  
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
