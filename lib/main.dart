@@ -4,84 +4,188 @@ void main() {
   runApp(const DongNeuApp());
 }
 
-class DongNeuApp extends StatelessWidget {
+const _primary = Color(0xFFFF7E33);
+const _secondary = Color(0xFF5E8D5A);
+const _tertiary = Color(0xFFFFB347);
+const _background = Color(0xFFFFFDF9);
+const _surface = Color(0xFFFFFFFF);
+const _surfaceVariant = Color(0xFFF2EBE1);
+const _primaryText = Color(0xFF2D241E);
+const _secondaryText = Color(0xFF7A6F66);
+const _alternate = Color(0xFFE8DFD5);
+const _accentText = Color(0xFFBCAFA3);
+const _success = Color(0xFF4CAF50);
+const _warning = Color(0xFFFF9800);
+const _info = Color(0xFF2196F3);
+
+enum AppScreen {
+  auth,
+  userType,
+  location,
+  home,
+  aiCondition,
+  recommendations,
+  filters,
+  storeDetail,
+  saved,
+  ownerRegistration,
+  promotion,
+}
+
+class DongNeuApp extends StatefulWidget {
   const DongNeuApp({super.key});
+
+  @override
+  State<DongNeuApp> createState() => _DongNeuAppState();
+}
+
+class _DongNeuAppState extends State<DongNeuApp> {
+  AppScreen _screen = AppScreen.auth;
+
+  void _open(AppScreen screen) {
+    setState(() => _screen = screen);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: '동네유',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF8F7F4),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFF7A1A),
-          primary: const Color(0xFFFF7A1A),
-          secondary: const Color(0xFF2BAE66),
-          surface: Colors.white,
-        ),
-        fontFamily: 'Roboto',
-        textTheme: const TextTheme(
-          headlineMedium: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            height: 1.3,
-          ),
-          titleLarge: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            height: 1.35,
-          ),
-          titleMedium: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            height: 1.4,
-          ),
-          titleSmall: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            height: 1.4,
-          ),
-          bodyMedium: TextStyle(fontSize: 14, height: 1.55),
-          labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          labelMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-          labelSmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-        ),
-      ),
-      home: const HomeScreen(),
+      theme: _dongNeuTheme(),
+      home: _AppRouter(screen: _screen, onOpen: _open),
     );
   }
 }
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+ThemeData _dongNeuTheme() {
+  final base = ThemeData(
+    useMaterial3: true,
+    scaffoldBackgroundColor: _background,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: _primary,
+      primary: _primary,
+      secondary: _secondary,
+      tertiary: _tertiary,
+      surface: _surface,
+      error: const Color(0xFFE53935),
+    ),
+  );
+
+  return base.copyWith(
+    textTheme: base.textTheme.copyWith(
+      displaySmall: const TextStyle(
+        fontSize: 38,
+        fontWeight: FontWeight.w700,
+        height: 1.2,
+        color: _primaryText,
+      ),
+      headlineMedium: const TextStyle(
+        fontSize: 26,
+        fontWeight: FontWeight.w700,
+        height: 1.3,
+        color: _primaryText,
+      ),
+      headlineSmall: const TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w600,
+        height: 1.35,
+        color: _primaryText,
+      ),
+      titleLarge: const TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        height: 1.4,
+        color: _primaryText,
+      ),
+      titleMedium: const TextStyle(
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+        height: 1.4,
+        color: _primaryText,
+      ),
+      titleSmall: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        height: 1.45,
+        color: _primaryText,
+      ),
+      bodyLarge: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+        height: 1.6,
+        color: _primaryText,
+      ),
+      bodyMedium: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        height: 1.55,
+        color: _primaryText,
+      ),
+      bodySmall: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        height: 1.5,
+        color: _secondaryText,
+      ),
+      labelLarge: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        height: 1.3,
+      ),
+      labelMedium: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        height: 1.3,
+      ),
+      labelSmall: const TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        height: 1.2,
+      ),
+    ),
+  );
+}
+
+class _AppRouter extends StatelessWidget {
+  const _AppRouter({required this.screen, required this.onOpen});
+
+  final AppScreen screen;
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (screen) {
+      AppScreen.auth => AuthOnboardingScreen(onOpen: onOpen),
+      AppScreen.userType => UserTypeSelectionScreen(onOpen: onOpen),
+      AppScreen.location => LocationSetupScreen(onOpen: onOpen),
+      AppScreen.home => HomeScreen(onOpen: onOpen),
+      AppScreen.aiCondition => AiConditionConfirmationScreen(onOpen: onOpen),
+      AppScreen.recommendations => Top3RecommendationsScreen(onOpen: onOpen),
+      AppScreen.filters => ManualSearchFiltersScreen(onOpen: onOpen),
+      AppScreen.storeDetail => StoreDetailScreen(onOpen: onOpen),
+      AppScreen.saved => SavedHistoryScreen(onOpen: onOpen),
+      AppScreen.ownerRegistration => OwnerStoreRegistrationScreen(
+        onOpen: onOpen,
+      ),
+      AppScreen.promotion => AiPromotionHelperScreen(onOpen: onOpen),
+    };
+  }
+}
+
+class _PhoneFrame extends StatelessWidget {
+  const _PhoneFrame({required this.child});
+
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _background,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Stack(
-              children: [
-                ListView(
-                  padding: const EdgeInsets.only(bottom: 108),
-                  children: const [
-                    _HomeHeader(),
-                    _AiRecommendationCard(),
-                    _SituationSection(),
-                    _ManualSearchCard(),
-                    _LocalPickSection(),
-                  ],
-                ),
-                const Align(
-                  alignment: Alignment.bottomCenter,
-                  child: _BottomNavigation(),
-                ),
-              ],
-            ),
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: child,
           ),
         ),
       ),
@@ -89,228 +193,343 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class _HomeHeader extends StatelessWidget {
-  const _HomeHeader();
+class _ScrollScreen extends StatelessWidget {
+  const _ScrollScreen({
+    required this.children,
+    this.bottom,
+    this.padding = const EdgeInsets.all(24),
+  });
+
+  final List<Widget> children;
+  final Widget? bottom;
+  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return _PhoneFrame(
+      child: Column(
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text.rich(
-                TextSpan(
-                  text: '안녕하세요, ',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF757575),
-                    fontSize: 16,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: '동네 주민님!',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF1E1E1E),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
+          Expanded(
+            child: ListView(
+              padding: padding.add(
+                EdgeInsets.only(bottom: bottom == null ? 24 : 8),
               ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(
-                    Icons.location_on_rounded,
-                    color: theme.colorScheme.primary,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 4),
-                  Text('충남대 궁동', style: theme.textTheme.titleMedium),
-                  const SizedBox(width: 2),
-                  const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: Color(0xFF757575),
-                    size: 20,
-                  ),
-                ],
-              ),
-            ],
+              children: children,
+            ),
           ),
-          IconButton(
-            tooltip: '알림',
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none_rounded),
-          ),
+          ?bottom,
         ],
       ),
     );
   }
 }
 
-class _AiRecommendationCard extends StatelessWidget {
-  const _AiRecommendationCard();
+class _TopBar extends StatelessWidget {
+  const _TopBar({
+    required this.title,
+    this.subtitle,
+    this.onBack,
+    this.trailing,
+  });
+
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onBack;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF7A1A), Color(0xFF2BAE66)],
-            begin: Alignment.bottomRight,
-            end: Alignment.topLeft,
-          ),
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x24FF7A1A),
-              blurRadius: 24,
-              offset: Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              right: -42,
-              top: -36,
-              child: Container(
-                width: 180,
-                height: 180,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.auto_awesome_rounded,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'AI 맞춤 추천',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    '지금 내 상황에 딱 맞는\n동네 맛집을 찾아드릴까요?',
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '상황, 예산, 취향만 말해주세요',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.84),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.search_rounded,
-                          color: theme.colorScheme.primary,
-                          size: 22,
-                        ),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            '예: 충남대 근처 가성비 혼밥 추천해줘',
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: Color(0xFF777777)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SituationSection extends StatelessWidget {
-  const _SituationSection();
-
-  static const _chips = [
-    ('🍱', '혼밥'),
-    ('💑', '데이트'),
-    ('💸', '가성비'),
-    ('☔', '비 오는 날'),
-    ('🤝', '모임'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
+    return Container(
+      color: _surface,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(
-              '이런 상황인가U?',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          const SizedBox(height: 16),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             child: Row(
               children: [
-                for (final chip in _chips) ...[
-                  _SituationChip(emoji: chip.$1, label: chip.$2),
-                  const SizedBox(width: 8),
-                ],
+                _IconButton(
+                  icon: onBack == null
+                      ? Icons.arrow_back_rounded
+                      : Icons.arrow_back_rounded,
+                  onPressed: onBack ?? () {},
+                  visible: onBack != null,
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(title, style: theme.textTheme.titleLarge),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          style: theme.textTheme.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                trailing ?? const SizedBox(width: 40, height: 40),
               ],
+            ),
+          ),
+          const Divider(height: 1, color: _alternate),
+        ],
+      ),
+    );
+  }
+}
+
+class _IconButton extends StatelessWidget {
+  const _IconButton({
+    required this.icon,
+    required this.onPressed,
+    this.visible = true,
+  });
+
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: visible
+          ? IconButton(
+              padding: EdgeInsets.zero,
+              onPressed: onPressed,
+              icon: Icon(icon, color: _primaryText),
+            )
+          : const SizedBox.shrink(),
+    );
+  }
+}
+
+class _PrimaryButton extends StatelessWidget {
+  const _PrimaryButton({
+    required this.label,
+    required this.onPressed,
+    this.icon,
+    this.outline = false,
+    this.ghost = false,
+    this.compact = false,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+  final IconData? icon;
+  final bool outline;
+  final bool ghost;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = outline || ghost ? _primary : Colors.white;
+    final background = outline || ghost ? Colors.transparent : _primary;
+    final border = outline ? _primary : Colors.transparent;
+
+    return SizedBox(
+      height: compact ? 40 : 52,
+      child: TextButton.icon(
+        onPressed: onPressed,
+        icon: icon == null ? const SizedBox.shrink() : Icon(icon, size: 18),
+        label: Text(label),
+        style: TextButton.styleFrom(
+          backgroundColor: background,
+          foregroundColor: foreground,
+          textStyle: Theme.of(context).textTheme.labelLarge,
+          padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(compact ? 14 : 18),
+            side: BorderSide(color: border),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, this.subtitle});
+
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: theme.textTheme.titleMedium),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle!,
+            style: theme.textTheme.bodySmall?.copyWith(color: _secondaryText),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _TextFieldBox extends StatelessWidget {
+  const _TextFieldBox({
+    required this.label,
+    required this.hint,
+    required this.icon,
+    this.trailing,
+  });
+
+  final String label;
+  final String hint;
+  final IconData icon;
+  final IconData? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: theme.textTheme.labelLarge),
+        const SizedBox(height: 8),
+        Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _alternate),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: _secondaryText),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  hint,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: _accentText,
+                  ),
+                ),
+              ),
+              if (trailing != null)
+                Icon(trailing, size: 20, color: _secondaryText),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SurfaceCard extends StatelessWidget {
+  const _SurfaceCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(20),
+    this.radius = 24,
+    this.color = _surface,
+    this.onTap,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final double radius;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: _alternate),
+      ),
+      child: child,
+    );
+
+    if (onTap == null) {
+      return card;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(radius),
+        child: card,
+      ),
+    );
+  }
+}
+
+class _IconTile extends StatelessWidget {
+  const _IconTile({
+    required this.icon,
+    this.color = _primary,
+    this.background = const Color(0x1AFF7E33),
+    this.size = 48,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color background;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(size >= 48 ? 16 : 12),
+      ),
+      child: Icon(icon, color: color, size: size >= 48 ? 24 : 20),
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill({required this.label, this.icon, this.selected = false});
+
+  final String label;
+  final IconData? icon;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    const chipColor = _primary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+      decoration: BoxDecoration(
+        color: selected ? chipColor.withValues(alpha: 0.10) : _surface,
+        borderRadius: BorderRadius.circular(9999),
+        border: Border.all(color: selected ? chipColor : _alternate),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 16, color: selected ? chipColor : _secondaryText),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: selected ? chipColor : _primaryText,
             ),
           ),
         ],
@@ -319,282 +538,76 @@ class _SituationSection extends StatelessWidget {
   }
 }
 
-class _SituationChip extends StatelessWidget {
-  const _SituationChip({required this.emoji, required this.label});
+class _DividerLabel extends StatelessWidget {
+  const _DividerLabel(this.label);
 
-  final String emoji;
   final String label;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE5E2DC)),
-      ),
-      child: Row(
-        children: [
-          Text(emoji),
-          const SizedBox(width: 4),
-          Text(
+    return Row(
+      children: [
+        const Expanded(child: Divider(color: _alternate)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
             label,
             style: Theme.of(
               context,
-            ).textTheme.labelLarge?.copyWith(color: const Color(0xFF202020)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ManualSearchCard extends StatelessWidget {
-  const _ManualSearchCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-          onTap: () {},
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFE5E2DC)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFE6D5),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(
-                    Icons.tune_rounded,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('직접 찾아보기', style: theme.textTheme.titleSmall),
-                      const SizedBox(height: 4),
-                      Text(
-                        '필터를 설정해서 취향대로 검색해요',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: const Color(0xFF757575),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFF757575),
-                ),
-              ],
-            ),
+            ).textTheme.labelMedium?.copyWith(color: _secondaryText),
           ),
         ),
-      ),
+        const Expanded(child: Divider(color: _alternate)),
+      ],
     );
   }
 }
 
-class _LocalPickSection extends StatelessWidget {
-  const _LocalPickSection();
+class _BottomNav extends StatelessWidget {
+  const _BottomNav({required this.current, required this.onOpen});
 
-  static const _picks = [
-    _LocalPick(
-      imageUrl:
-          'https://dimg.dreamflow.cloud/v1/image/korean%20noodle%20soup%20bowl',
-      tag: '가까워U',
-      tagColor: Color(0xFF1E88E5),
-      tagBackground: Color(0xFFE3F2FD),
-      name: '궁동 칼국수',
-      rating: '4.8',
-    ),
-    _LocalPick(
-      imageUrl:
-          'https://dimg.dreamflow.cloud/v1/image/korean%20street%20food%20tteokbokki',
-      tag: '아껴U',
-      tagColor: Color(0xFF43A047),
-      tagBackground: Color(0xFFE8F5E9),
-      name: '할머니 분식',
-      rating: '4.5',
-    ),
-    _LocalPick(
-      imageUrl:
-          'https://dimg.dreamflow.cloud/v1/image/modern%20minimal%20cafe%20interior',
-      tag: '새로워U',
-      tagColor: Color(0xFFFB8C00),
-      tagBackground: Color(0xFFFFF3E0),
-      name: '카페 오렌지',
-      rating: '4.9',
-    ),
-  ];
+  final AppScreen current;
+  final ValueChanged<AppScreen> onOpen;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 32),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('오늘의 동네픽', style: Theme.of(context).textTheme.titleMedium),
-                TextButton(onPressed: () {}, child: const Text('전체보기')),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              children: [for (final pick in _picks) _LocalPickCard(pick: pick)],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LocalPickCard extends StatelessWidget {
-  const _LocalPickCard({required this.pick});
-
-  final _LocalPick pick;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+      height: 80,
+      decoration: const BoxDecoration(
+        color: _surface,
+        border: Border(top: BorderSide(color: _alternate)),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          SizedBox(
-            height: 100,
-            width: double.infinity,
-            child: Image.network(
-              pick.imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: const Color(0xFFFFE6D5),
-                  child: Icon(
-                    Icons.restaurant_rounded,
-                    color: theme.colorScheme.primary,
-                  ),
-                );
-              },
-            ),
+          _NavItem(
+            icon: Icons.home_rounded,
+            label: '홈',
+            selected: current == AppScreen.home,
+            onTap: () => onOpen(AppScreen.home),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: pick.tagBackground,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    pick.tag,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: pick.tagColor,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  pick.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.star_rounded,
-                      color: Color(0xFFFFB300),
-                      size: 14,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      pick.rating,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: const Color(0xFF757575),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          _NavItem(
+            icon: Icons.search_rounded,
+            label: '검색',
+            selected: current == AppScreen.filters,
+            onTap: () => onOpen(AppScreen.filters),
+          ),
+          _NavItem(
+            icon: Icons.bookmark_rounded,
+            label: '저장',
+            selected: current == AppScreen.saved,
+            onTap: () => onOpen(AppScreen.saved),
+          ),
+          _NavItem(
+            icon: Icons.person_rounded,
+            label: '마이',
+            selected:
+                current == AppScreen.ownerRegistration ||
+                current == AppScreen.promotion,
+            onTap: () => onOpen(AppScreen.userType),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BottomNavigation extends StatelessWidget {
-  const _BottomNavigation();
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE5E2DC))),
-      ),
-      child: SizedBox(
-        height: 80,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(icon: Icons.home_rounded, label: '홈', color: primary),
-              const _NavItem(icon: Icons.search_rounded, label: '검색'),
-              const _NavItem(icon: Icons.bookmark_rounded, label: '저장'),
-              const _NavItem(icon: Icons.person_rounded, label: '마이'),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -604,27 +617,419 @@ class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
     required this.label,
-    this.color = const Color(0xFF757575),
+    required this.selected,
+    required this.onTap,
   });
 
   final IconData icon;
   final String label;
-  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 56,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    final color = selected ? _primary : _secondaryText;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 58,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AuthOnboardingScreen extends StatelessWidget {
+  const AuthOnboardingScreen({super.key, required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return _ScrollScreen(
+      children: [
+        SizedBox(
+          height: 180,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                left: 28,
+                top: 20,
+                child: _softCircle(120, _primary.withValues(alpha: 0.10)),
+              ),
+              Positioned(
+                right: 54,
+                bottom: 22,
+                child: _softCircle(82, _success.withValues(alpha: 0.10)),
+              ),
+              Container(
+                width: 188,
+                height: 138,
+                decoration: BoxDecoration(
+                  color: _surface,
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(color: _alternate),
+                ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  color: _primary,
+                  size: 72,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          '반가워U, 동네유!',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '우리 동네 숨은 맛집을 찾아드릴게요',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(color: _secondaryText),
+        ),
+        const SizedBox(height: 28),
+        const _TextFieldBox(
+          label: '이메일',
+          hint: 'example@email.com',
+          icon: Icons.mail_outline_rounded,
+        ),
+        const SizedBox(height: 16),
+        const _TextFieldBox(
+          label: '비밀번호',
+          hint: '비밀번호를 입력하세요',
+          icon: Icons.lock_outline_rounded,
+          trailing: Icons.visibility_off_rounded,
+        ),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            '비밀번호를 잊으셨나요?',
+            style: theme.textTheme.labelMedium?.copyWith(color: _secondaryText),
+          ),
+        ),
+        const SizedBox(height: 20),
+        _PrimaryButton(
+          label: '시작하기',
+          onPressed: () => onOpen(AppScreen.userType),
+        ),
+        const SizedBox(height: 20),
+        const _DividerLabel('또는'),
+        const SizedBox(height: 16),
+        _SocialButton(
+          label: '구글로 계속하기',
+          icon: Icons.g_mobiledata_rounded,
+          onTap: () => onOpen(AppScreen.userType),
+        ),
+        const SizedBox(height: 12),
+        _SocialButton(
+          label: 'Apple로 계속하기',
+          icon: Icons.apple_rounded,
+          onTap: () => onOpen(AppScreen.userType),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '처음 오셨나요?',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: _secondaryText,
+              ),
+            ),
+            TextButton(
+              onPressed: () => onOpen(AppScreen.userType),
+              child: const Text('회원가입'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+Widget _softCircle(double size, Color color) {
+  return Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
+}
+
+class _SocialButton extends StatelessWidget {
+  const _SocialButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+      radius: 16,
+      onTap: onTap,
+      child: Row(
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 4),
+          Icon(icon, color: _primary, size: 24),
+          const SizedBox(width: 12),
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
+        ],
+      ),
+    );
+  }
+}
+
+class UserTypeSelectionScreen extends StatelessWidget {
+  const UserTypeSelectionScreen({super.key, required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return _ScrollScreen(
+      children: [
+        const SizedBox(height: 24),
+        Center(
+          child: Container(
+            width: 92,
+            height: 92,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [_primary, _tertiary]),
+              borderRadius: BorderRadius.circular(32),
+            ),
+            child: const Icon(
+              Icons.storefront_rounded,
+              color: Colors.white,
+              size: 46,
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          '반가워U, 동네유!',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineMedium,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '당신의 따뜻한 동네 생활을 시작해보세요',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(color: _secondaryText),
+        ),
+        const SizedBox(height: 32),
+        _ModeSelectionCard(
+          icon: Icons.restaurant_rounded,
+          title: '손님으로 시작하기',
+          subtitle: '우리 동네 숨은 맛집과\n따뜻한 가게를 추천해드려요',
+          button: '추천 받으러 가기',
+          onTap: () => onOpen(AppScreen.location),
+        ),
+        const SizedBox(height: 16),
+        _ModeSelectionCard(
+          icon: Icons.add_business_rounded,
+          title: '사장님으로 시작하기',
+          subtitle: '가게를 등록하고 AI로\n효과적인 홍보 문구를 만들어보세요',
+          button: '내 가게 등록하기',
+          outline: true,
+          onTap: () => onOpen(AppScreen.ownerRegistration),
+        ),
+        const SizedBox(height: 24),
+        Center(
+          child: TextButton(
+            onPressed: () => onOpen(AppScreen.promotion),
+            child: const Text('도움이 필요하신가요?  문의하기'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ModeSelectionCard extends StatelessWidget {
+  const _ModeSelectionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.button,
+    required this.onTap,
+    this.outline = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String button;
+  final VoidCallback onTap;
+  final bool outline;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _IconTile(
+            icon: icon,
+            color: outline ? _secondary : _primary,
+            background: outline
+                ? _secondary.withValues(alpha: 0.10)
+                : _primary.withValues(alpha: 0.10),
+          ),
+          const SizedBox(height: 18),
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
           Text(
-            label,
+            subtitle,
             style: Theme.of(
               context,
-            ).textTheme.labelSmall?.copyWith(color: color),
+            ).textTheme.bodyMedium?.copyWith(color: _secondaryText),
+          ),
+          const SizedBox(height: 20),
+          _PrimaryButton(label: button, outline: outline, onPressed: onTap),
+        ],
+      ),
+    );
+  }
+}
+
+class LocationSetupScreen extends StatelessWidget {
+  const LocationSetupScreen({super.key, required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PhoneFrame(
+      child: Column(
+        children: [
+          _TopBar(title: '내 동네 설정', onBack: () => onOpen(AppScreen.userType)),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+              children: [
+                Container(
+                  height: 190,
+                  decoration: BoxDecoration(
+                    color: _surfaceVariant,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(painter: _MapGridPainter()),
+                      ),
+                      Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _surface,
+                                borderRadius: BorderRadius.circular(9999),
+                              ),
+                              child: const Text('현재 위치'),
+                            ),
+                            const SizedBox(height: 12),
+                            const Icon(
+                              Icons.location_on_rounded,
+                              color: _primary,
+                              size: 42,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        right: 14,
+                        bottom: 14,
+                        child: _IconButton(
+                          icon: Icons.my_location_rounded,
+                          onPressed: () {},
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const _TextFieldBox(
+                  label: '동네 검색',
+                  hint: '동네 이름이나 도로명으로 검색',
+                  icon: Icons.search_rounded,
+                ),
+                const SizedBox(height: 24),
+                const _SectionHeader(title: '주변 동네'),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: const [
+                    _Pill(label: '대전 유성구 궁동', selected: true),
+                    _Pill(label: '대전 유성구 어은동'),
+                    _Pill(label: '대전 유성구 봉명동'),
+                    _Pill(label: '대전 유성구 죽동'),
+                    _Pill(label: '대전 유성구 구성동'),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const _SectionHeader(title: '현재 설정된 위치'),
+                const SizedBox(height: 12),
+                const _LocationItem(
+                  title: '궁동',
+                  subtitle: '현재 설정된 동네입니다',
+                  selected: true,
+                ),
+                const SizedBox(height: 20),
+                const _SectionHeader(title: '최근 검색한 위치'),
+                const SizedBox(height: 12),
+                const _LocationItem(
+                  title: '대전 유성구 봉명동 (유성온천역)',
+                  subtitle: '대전광역시 유성구 계룡로 지하 97',
+                ),
+                const SizedBox(height: 10),
+                const _LocationItem(
+                  title: '대전 유성구 어은동 (카이스트)',
+                  subtitle: '카이스트 본원',
+                ),
+              ],
+            ),
+          ),
+          _BottomActionBar(
+            child: _PrimaryButton(
+              label: '이 위치로 설정',
+              onPressed: () => onOpen(AppScreen.home),
+            ),
           ),
         ],
       ),
@@ -632,20 +1037,2201 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-class _LocalPick {
-  const _LocalPick({
-    required this.imageUrl,
-    required this.tag,
-    required this.tagColor,
-    required this.tagBackground,
-    required this.name,
-    required this.rating,
+class _MapGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final road = Paint()
+      ..color = _alternate
+      ..strokeWidth = 2;
+    for (var x = -60.0; x < size.width; x += 70) {
+      canvas.drawLine(Offset(x, 0), Offset(x + 90, size.height), road);
+    }
+    for (var y = 18.0; y < size.height; y += 52) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y + 20), road);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _LocationItem extends StatelessWidget {
+  const _LocationItem({
+    required this.title,
+    required this.subtitle,
+    this.selected = false,
   });
 
-  final String imageUrl;
+  final String title;
+  final String subtitle;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          _IconTile(
+            icon: Icons.place_rounded,
+            color: selected ? _primary : _secondaryText,
+            background: selected
+                ? _primary.withValues(alpha: 0.10)
+                : _surfaceVariant,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+          if (selected)
+            const Icon(Icons.check_circle_rounded, color: _primary, size: 20),
+        ],
+      ),
+    );
+  }
+}
+
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key, required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return _PhoneFrame(
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text.rich(
+                            TextSpan(
+                              text: '안녕하세요, ',
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: _secondaryText,
+                              ),
+                              children: [
+                                TextSpan(
+                                  text: '동네 주민님!',
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    color: _primaryText,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          InkWell(
+                            onTap: () => onOpen(AppScreen.location),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.location_on_rounded,
+                                  color: _primary,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '충남대 궁동',
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                                const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: _secondaryText,
+                                  size: 20,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        onPressed: () {},
+                        icon: const Icon(Icons.notifications_none_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  child: _AiHeroCard(
+                    onTap: () => onOpen(AppScreen.aiCondition),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          '이런 상황인가U?',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Row(
+                          children: [
+                            _SituationChip(
+                              icon: Icons.rice_bowl_rounded,
+                              label: '혼밥',
+                              onTap: () => onOpen(AppScreen.aiCondition),
+                            ),
+                            _SituationChip(
+                              icon: Icons.favorite_rounded,
+                              label: '데이트',
+                              onTap: () => onOpen(AppScreen.aiCondition),
+                            ),
+                            _SituationChip(
+                              icon: Icons.savings_rounded,
+                              label: '가성비',
+                              onTap: () => onOpen(AppScreen.aiCondition),
+                            ),
+                            _SituationChip(
+                              icon: Icons.umbrella_rounded,
+                              label: '비 오는 날',
+                              onTap: () => onOpen(AppScreen.aiCondition),
+                            ),
+                            _SituationChip(
+                              icon: Icons.groups_rounded,
+                              label: '모임',
+                              onTap: () => onOpen(AppScreen.aiCondition),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  child: _SurfaceCard(
+                    onTap: () => onOpen(AppScreen.filters),
+                    child: Row(
+                      children: [
+                        const _IconTile(
+                          icon: Icons.tune_rounded,
+                          background: Color(0x1AFF7E33),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '직접 찾아보기',
+                                style: theme.textTheme.titleSmall,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '필터를 설정해서 취향대로 검색해요',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: _secondaryText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: _secondaryText,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                _LocalPicksSection(onOpen: onOpen),
+              ],
+            ),
+          ),
+          _BottomNav(current: AppScreen.home, onOpen: onOpen),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiHeroCard extends StatelessWidget {
+  const _AiHeroCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(32),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [_primary, _secondary],
+              begin: Alignment.bottomRight,
+              end: Alignment.topLeft,
+            ),
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                color: _primary.withValues(alpha: 0.14),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -40,
+                top: -40,
+                child: Container(
+                  width: 180,
+                  height: 180,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.13),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.20),
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.auto_awesome_rounded,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                          SizedBox(width: 5),
+                          Text(
+                            'AI 맞춤 추천',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '지금 내 상황에 딱 맞는\n동네 맛집을 찾아드릴까요?',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '상황, 예산, 취향만 말해주세요',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.80),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: _surface,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.search_rounded,
+                            color: _primary,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '예: 충남대 근처 가성비 혼밥 추천해줘',
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: _accentText,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SituationChip extends StatelessWidget {
+  const _SituationChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9999),
+        child: _Pill(icon: icon, label: label),
+      ),
+    );
+  }
+}
+
+class _LocalPicksSection extends StatelessWidget {
+  const _LocalPicksSection({required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('오늘의 동네픽', style: theme.textTheme.titleMedium),
+                _PrimaryButton(
+                  label: '전체보기',
+                  compact: true,
+                  ghost: true,
+                  onPressed: () => onOpen(AppScreen.recommendations),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                _LocalPickCard(
+                  tag: '가까워U',
+                  tagColor: _info,
+                  tagBg: _info.withValues(alpha: 0.10),
+                  name: '궁동 칼국수',
+                  rating: '4.8',
+                  icon: Icons.ramen_dining_rounded,
+                  onTap: () => onOpen(AppScreen.storeDetail),
+                ),
+                _LocalPickCard(
+                  tag: '아껴U',
+                  tagColor: _success,
+                  tagBg: _success.withValues(alpha: 0.10),
+                  name: '할머니 분식',
+                  rating: '4.5',
+                  icon: Icons.local_dining_rounded,
+                  onTap: () => onOpen(AppScreen.storeDetail),
+                ),
+                _LocalPickCard(
+                  tag: '새로워U',
+                  tagColor: _warning,
+                  tagBg: _warning.withValues(alpha: 0.10),
+                  name: '카페 오렌지',
+                  rating: '4.9',
+                  icon: Icons.local_cafe_rounded,
+                  onTap: () => onOpen(AppScreen.storeDetail),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LocalPickCard extends StatelessWidget {
+  const _LocalPickCard({
+    required this.tag,
+    required this.tagColor,
+    required this.tagBg,
+    required this.name,
+    required this.rating,
+    required this.icon,
+    required this.onTap,
+  });
+
   final String tag;
   final Color tagColor;
-  final Color tagBackground;
+  final Color tagBg;
   final String name;
   final String rating;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: 148,
+      margin: const EdgeInsets.only(right: 16),
+      child: _SurfaceCard(
+        padding: EdgeInsets.zero,
+        radius: 24,
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              height: 104,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [tagColor.withValues(alpha: 0.22), _surfaceVariant],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+              ),
+              child: Icon(icon, color: tagColor, size: 42),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: tagBg,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      tag,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: tagColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.star_rounded, color: _warning, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        rating,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: _secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AiConditionConfirmationScreen extends StatelessWidget {
+  const AiConditionConfirmationScreen({super.key, required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return _ScrollScreen(
+      padding: EdgeInsets.zero,
+      bottom: _BottomActionBar(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PrimaryButton(
+              label: '이대로 추천 받기',
+              onPressed: () => onOpen(AppScreen.recommendations),
+            ),
+            const SizedBox(height: 10),
+            _PrimaryButton(
+              label: '조건 수정하기',
+              ghost: true,
+              onPressed: () => onOpen(AppScreen.filters),
+            ),
+          ],
+        ),
+      ),
+      children: [
+        _TopBar(
+          title: '',
+          onBack: () => onOpen(AppScreen.home),
+          trailing: _IconButton(
+            icon: Icons.close_rounded,
+            onPressed: () => onOpen(AppScreen.home),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '맞춤 추천을 위해\n조건을 확인해볼까U?',
+                style: theme.textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'AI가 분석한 오늘의 방문 조건이에요',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: _secondaryText,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _SurfaceCard(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: _primary.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: const Icon(
+                            Icons.auto_awesome_rounded,
+                            color: _primary,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            '“충남대 근처에서 혼자 먹기 좋고 만 원 이하로 든든한 저녁 추천해줘”',
+                            style: theme.textTheme.titleSmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    const Divider(color: _alternate),
+                    const SizedBox(height: 14),
+                    const _ConditionRow(
+                      icon: Icons.location_on_rounded,
+                      label: '위치',
+                      value: '충남대 근처',
+                    ),
+                    const _ConditionRow(
+                      icon: Icons.payments_rounded,
+                      label: '예산',
+                      value: '만 원 이하',
+                    ),
+                    const _ConditionRow(
+                      icon: Icons.schedule_rounded,
+                      label: '시간대',
+                      value: '저녁',
+                    ),
+                    const _ConditionRow(
+                      icon: Icons.person_rounded,
+                      label: '상황',
+                      value: '혼밥',
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('추출된 키워드', style: theme.textTheme.titleSmall),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: const [
+                        _Pill(label: '가성비', selected: true),
+                        _Pill(label: '조용한'),
+                        _Pill(label: '로컬맛집'),
+                        _Pill(label: '든든한'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              _SurfaceCard(
+                color: _primary.withValues(alpha: 0.08),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: _primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '이 조건으로 맛집 3곳을 찾아드릴게요!',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: _primaryText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ConditionRow extends StatelessWidget {
+  const _ConditionRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: _primary, size: 20),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 58,
+            child: Text(
+              label,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: _secondaryText,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: theme.textTheme.labelLarge,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class Top3RecommendationsScreen extends StatelessWidget {
+  const Top3RecommendationsScreen({super.key, required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PhoneFrame(
+      child: Column(
+        children: [
+          _TopBar(
+            title: '동네U의 추천',
+            subtitle: '오늘의 완벽한 3곳을 찾았어요!',
+            onBack: () => onOpen(AppScreen.aiCondition),
+            trailing: _IconButton(
+              icon: Icons.refresh_rounded,
+              onPressed: () {},
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              children: [
+                _SurfaceCard(
+                  color: _primary.withValues(alpha: 0.08),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.auto_awesome_rounded, color: _primary),
+                      SizedBox(width: 12),
+                      Expanded(child: Text('충남대 근처, 1만원 이하 혼밥하기 좋은 곳들입니다.')),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _RecommendationCard(
+                  rank: 1,
+                  tag: '가까워U',
+                  name: '할머니 국수',
+                  rating: '4.8',
+                  price: '~8,000원',
+                  category: '한식/국수',
+                  distance: '도보 3분',
+                  reason: '현재 위치에서 가장 가깝고, 비 오는 날 따뜻한 멸치 육수가 일품이에요.',
+                  color: _info,
+                  icon: Icons.ramen_dining_rounded,
+                  onTap: () => onOpen(AppScreen.storeDetail),
+                ),
+                const SizedBox(height: 14),
+                _RecommendationCard(
+                  rank: 2,
+                  tag: '아껴U',
+                  name: '궁동 보리밥',
+                  rating: '4.5',
+                  price: '~7,000원',
+                  category: '한식/보리밥',
+                  distance: '도보 8분',
+                  reason: '착한가격업소로 선정된 곳이며 푸짐한 반찬을 즐길 수 있어 가성비가 좋아요.',
+                  color: _success,
+                  icon: Icons.eco_rounded,
+                  onTap: () => onOpen(AppScreen.storeDetail),
+                ),
+                const SizedBox(height: 14),
+                _RecommendationCard(
+                  rank: 3,
+                  tag: '새로워U',
+                  name: '숨은 식탁',
+                  rating: '4.9',
+                  price: '~9,500원',
+                  category: '퓨전 일식',
+                  distance: '도보 10분',
+                  reason: '최근 동네 주민 리뷰가 빠르게 늘고 있는 조용한 혼밥 맛집이에요.',
+                  color: _warning,
+                  icon: Icons.set_meal_rounded,
+                  onTap: () => onOpen(AppScreen.storeDetail),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  '추천 결과가 마음에 드셨나요?',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _PrimaryButton(
+                        label: '다시 추천',
+                        outline: true,
+                        onPressed: () => onOpen(AppScreen.aiCondition),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _PrimaryButton(
+                        label: '조건 수정',
+                        onPressed: () => onOpen(AppScreen.filters),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          _BottomNav(current: AppScreen.home, onOpen: onOpen),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecommendationCard extends StatelessWidget {
+  const _RecommendationCard({
+    required this.rank,
+    required this.tag,
+    required this.name,
+    required this.rating,
+    required this.price,
+    required this.category,
+    required this.distance,
+    required this.reason,
+    required this.color,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final int rank;
+  final String tag;
+  final String name;
+  final String rating;
+  final String price;
+  final String category;
+  final String distance;
+  final String reason;
+  final Color color;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return _SurfaceCard(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _IconTile(
+                    icon: icon,
+                    color: color,
+                    background: color.withValues(alpha: 0.12),
+                    size: 58,
+                  ),
+                  Positioned(
+                    left: -7,
+                    top: -7,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                        color: _primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '$rank',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _SmallTag(label: tag, color: color),
+                        const Spacer(),
+                        const Icon(
+                          Icons.star_rounded,
+                          color: _warning,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(rating, style: theme.textTheme.labelMedium),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(name, style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        _MetaText(price),
+                        _MetaText(category),
+                        _MetaText(distance),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            reason,
+            style: theme.textTheme.bodyMedium?.copyWith(color: _secondaryText),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SmallTag extends StatelessWidget {
+  const _SmallTag({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
+      ),
+    );
+  }
+}
+
+class _MetaText extends StatelessWidget {
+  const _MetaText(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: Theme.of(
+        context,
+      ).textTheme.bodySmall?.copyWith(color: _secondaryText),
+    );
+  }
+}
+
+class ManualSearchFiltersScreen extends StatelessWidget {
+  const ManualSearchFiltersScreen({super.key, required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PhoneFrame(
+      child: Column(
+        children: [
+          Container(
+            color: _surface,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  child: Row(
+                    children: [
+                      _IconButton(
+                        icon: Icons.arrow_back_rounded,
+                        onPressed: () => onOpen(AppScreen.home),
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: _SearchBarMock(hint: '동네 맛집, 메뉴를 검색해보세요'),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on_rounded,
+                        color: _primary,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '충남대 궁동',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: _secondaryText,
+                        size: 18,
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: _alternate),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                const _FilterSection(
+                  title: '예산',
+                  subtitle: '1인분 기준',
+                  items: ['~7천원', '~1만원', '~1.5만원', '상관없음'],
+                  selectedIndex: 1,
+                ),
+                const SizedBox(height: 26),
+                const _FilterSection(
+                  title: '오늘의 상황',
+                  items: ['혼밥', '데이트', '친구와', '가족모임', '빠른 식사'],
+                  selectedIndex: 0,
+                ),
+                const SizedBox(height: 26),
+                const _SectionHeader(title: '카테고리'),
+                const SizedBox(height: 12),
+                GridView.count(
+                  crossAxisCount: 4,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: const [
+                    _CategoryTile(icon: Icons.rice_bowl_rounded, label: '한식'),
+                    _CategoryTile(
+                      icon: Icons.ramen_dining_rounded,
+                      label: '일식/면',
+                    ),
+                    _CategoryTile(icon: Icons.local_pizza_rounded, label: '양식'),
+                    _CategoryTile(icon: Icons.local_cafe_rounded, label: '카페'),
+                  ],
+                ),
+                const SizedBox(height: 26),
+                const _SectionHeader(title: '로컬 특별 조건'),
+                const SizedBox(height: 12),
+                const _CheckCard(
+                  title: '착한가격업소',
+                  subtitle: '행안부 지정 물가 안정 모범 업소',
+                  checked: true,
+                ),
+                const SizedBox(height: 10),
+                const _CheckCard(title: '전통시장 근처', subtitle: '시장 상권 활성화 가게'),
+                const SizedBox(height: 10),
+                const _CheckCard(title: '새로 생긴 가게', subtitle: '최근 6개월 이내 등록'),
+              ],
+            ),
+          ),
+          _BottomActionBar(
+            child: Row(
+              children: [
+                _IconButton(icon: Icons.refresh_rounded, onPressed: () {}),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _PrimaryButton(
+                    label: '결과 보기',
+                    onPressed: () => onOpen(AppScreen.recommendations),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchBarMock extends StatelessWidget {
+  const _SearchBarMock({required this.hint});
+
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: _surfaceVariant,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, size: 20, color: _secondaryText),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              hint,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: _accentText),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterSection extends StatelessWidget {
+  const _FilterSection({
+    required this.title,
+    required this.items,
+    this.subtitle,
+    this.selectedIndex,
+  });
+
+  final String title;
+  final String? subtitle;
+  final List<String> items;
+  final int? selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(title: title, subtitle: subtitle),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (var i = 0; i < items.length; i++)
+              _Pill(label: items[i], selected: selectedIndex == i),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryTile extends StatelessWidget {
+  const _CategoryTile({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: const EdgeInsets.all(8),
+      radius: 16,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: _primary, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckCard extends StatelessWidget {
+  const _CheckCard({
+    required this.title,
+    required this.subtitle,
+    this.checked = false,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool checked;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Icon(
+            checked ? Icons.check_box_rounded : Icons.check_box_outline_blank,
+            color: checked ? _primary : _secondaryText,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 3),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StoreDetailScreen extends StatelessWidget {
+  const StoreDetailScreen({super.key, required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return _PhoneFrame(
+      child: Stack(
+        children: [
+          ListView(
+            padding: const EdgeInsets.only(bottom: 116),
+            children: [
+              Stack(
+                children: [
+                  Container(
+                    height: 260,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [_tertiary, _primary],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.ramen_dining_rounded,
+                        color: Colors.white,
+                        size: 92,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 16,
+                    left: 16,
+                    child: _CircleAction(
+                      icon: Icons.arrow_back_rounded,
+                      onTap: () => onOpen(AppScreen.recommendations),
+                    ),
+                  ),
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: Row(
+                      children: [
+                        _CircleAction(icon: Icons.share_rounded, onTap: () {}),
+                        const SizedBox(width: 8),
+                        _CircleAction(
+                          icon: Icons.bookmark_border_rounded,
+                          onTap: () => onOpen(AppScreen.saved),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    left: 24,
+                    bottom: 22,
+                    child: _SmallTag(label: '가까워U', color: _info),
+                  ),
+                ],
+              ),
+              Transform.translate(
+                offset: const Offset(0, -22),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: _SurfaceCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '궁동 칼국수',
+                                style: theme.textTheme.headlineSmall,
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.star_rounded,
+                                  color: _warning,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 3),
+                                Text('4.8', style: theme.textTheme.labelLarge),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _Pill(label: '한식/국수'),
+                            _Pill(label: '도보 3분'),
+                            _Pill(label: '~8,000원'),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        const Divider(color: _alternate),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.auto_awesome_rounded,
+                              color: _primary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '동네U 추천 이유',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '현재 위치에서 가장 가깝고, 비 오는 날 따뜻한 멸치 육수가 일품이에요.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: _secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('대표 메뉴', style: theme.textTheme.titleMedium),
+                        Text(
+                          '2개',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: _secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const _MenuItemCard(
+                      icon: Icons.ramen_dining_rounded,
+                      name: '바지락 칼국수',
+                      desc: '시원한 바지락 육수와 직접 뽑은 면',
+                      price: '8,000원',
+                    ),
+                    const SizedBox(height: 10),
+                    const _MenuItemCard(
+                      icon: Icons.lunch_dining_rounded,
+                      name: '김치 만두',
+                      desc: '국수와 함께 먹기 좋은 매콤한 만두',
+                      price: '5,000원',
+                    ),
+                    const SizedBox(height: 20),
+                    _SurfaceCard(
+                      color: _surfaceVariant.withValues(alpha: 0.50),
+                      child: const Column(
+                        children: [
+                          _StoreInfoRow(
+                            icon: Icons.schedule_rounded,
+                            text: '매일 10:30 - 21:00',
+                          ),
+                          _StoreInfoRow(
+                            icon: Icons.payments_rounded,
+                            text: '1인 평균 8,000원',
+                          ),
+                          _StoreInfoRow(
+                            icon: Icons.info_outlined,
+                            text: '대전 유성구 궁동 대학로 근처',
+                            bottom: false,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: _BottomActionBar(
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 76,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          onPressed: () => onOpen(AppScreen.saved),
+                          icon: const Icon(Icons.bookmark_border_rounded),
+                        ),
+                        Text('저장', style: theme.textTheme.labelSmall),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _PrimaryButton(
+                      label: '길찾기',
+                      icon: Icons.near_me_rounded,
+                      onPressed: () {},
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CircleAction extends StatelessWidget {
+  const _CircleAction({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.88),
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        onPressed: onTap,
+        icon: Icon(icon, color: _primaryText, size: 22),
+      ),
+    );
+  }
+}
+
+class _MenuItemCard extends StatelessWidget {
+  const _MenuItemCard({
+    required this.icon,
+    required this.name,
+    required this.desc,
+    required this.price,
+  });
+
+  final IconData icon;
+  final String name;
+  final String desc;
+  final String price;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          _IconTile(icon: icon),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(desc, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+          Text(price, style: Theme.of(context).textTheme.labelLarge),
+        ],
+      ),
+    );
+  }
+}
+
+class _StoreInfoRow extends StatelessWidget {
+  const _StoreInfoRow({
+    required this.icon,
+    required this.text,
+    this.bottom = true,
+  });
+
+  final IconData icon;
+  final String text;
+  final bool bottom;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom ? 16 : 0),
+      child: Row(
+        children: [
+          Icon(icon, color: _secondaryText, size: 20),
+          const SizedBox(width: 14),
+          Expanded(child: Text(text)),
+        ],
+      ),
+    );
+  }
+}
+
+class SavedHistoryScreen extends StatelessWidget {
+  const SavedHistoryScreen({super.key, required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return _PhoneFrame(
+      child: Column(
+        children: [
+          Container(
+            color: _surface,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Text('저장', style: theme.textTheme.headlineSmall),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () {},
+                            icon: const Icon(Icons.settings_rounded),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: const [
+                          Expanded(
+                            child: _Pill(label: '저장한 가게', selected: true),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(child: _Pill(label: '추천 기록')),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: _alternate),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                Row(
+                  children: [
+                    Text('총 3곳', style: theme.textTheme.titleMedium),
+                    const Spacer(),
+                    const Icon(
+                      Icons.sort_rounded,
+                      color: _secondaryText,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '최신순',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: _secondaryText,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _SavedStoreCard(
+                  icon: Icons.ramen_dining_rounded,
+                  name: '궁동 칼국수',
+                  rating: '4.8',
+                  category: '한식/국수',
+                  distance: '도보 3분',
+                  price: '~8,000원',
+                  onTap: () => onOpen(AppScreen.storeDetail),
+                ),
+                const SizedBox(height: 12),
+                _SavedStoreCard(
+                  icon: Icons.local_dining_rounded,
+                  name: '할머니 분식',
+                  rating: '4.5',
+                  category: '분식',
+                  distance: '도보 6분',
+                  price: '~7,000원',
+                  onTap: () => onOpen(AppScreen.storeDetail),
+                ),
+                const SizedBox(height: 24),
+                const Divider(color: _alternate),
+                const SizedBox(height: 18),
+                Text('최근 추천 기록', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 12),
+                const _HistoryItem(
+                  query: '가성비 혼밥 추천',
+                  date: '오늘 저녁',
+                  result: '3곳 추천',
+                ),
+                const SizedBox(height: 10),
+                const _HistoryItem(
+                  query: '데이트하기 좋은 카페',
+                  date: '어제',
+                  result: '3곳 추천',
+                ),
+                const SizedBox(height: 20),
+                _SurfaceCard(
+                  color: _surfaceVariant.withValues(alpha: 0.50),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: _primary,
+                        size: 30,
+                      ),
+                      const SizedBox(height: 10),
+                      Text('새로운 추천을 받아보세요', style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 12),
+                      _PrimaryButton(
+                        label: '추천 받기',
+                        compact: true,
+                        onPressed: () => onOpen(AppScreen.aiCondition),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _BottomNav(current: AppScreen.saved, onOpen: onOpen),
+        ],
+      ),
+    );
+  }
+}
+
+class _SavedStoreCard extends StatelessWidget {
+  const _SavedStoreCard({
+    required this.icon,
+    required this.name,
+    required this.rating,
+    required this.category,
+    required this.distance,
+    required this.price,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String name;
+  final String rating;
+  final String category;
+  final String distance;
+  final String price;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          _IconTile(icon: icon),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.star_rounded, color: _warning, size: 14),
+                    const SizedBox(width: 3),
+                    Text(rating, style: Theme.of(context).textTheme.labelSmall),
+                    Text(' · $category · $distance'),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(price, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: _secondaryText),
+        ],
+      ),
+    );
+  }
+}
+
+class _HistoryItem extends StatelessWidget {
+  const _HistoryItem({
+    required this.query,
+    required this.date,
+    required this.result,
+  });
+
+  final String query;
+  final String date;
+  final String result;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          const _IconTile(icon: Icons.history_rounded),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(query, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(
+                  '$date · $result',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class OwnerStoreRegistrationScreen extends StatelessWidget {
+  const OwnerStoreRegistrationScreen({super.key, required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return _PhoneFrame(
+      child: Column(
+        children: [
+          _TopBar(
+            title: '우리 가게 등록하기',
+            onBack: () => onOpen(AppScreen.userType),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                _SurfaceCard(
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Text('기본 정보 입력', style: theme.textTheme.titleSmall),
+                          const Spacer(),
+                          Text(
+                            '1 / 2',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: _secondaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: const LinearProgressIndicator(
+                          value: 0.5,
+                          minHeight: 8,
+                          backgroundColor: _surfaceVariant,
+                          color: _primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const _SectionHeader(title: '가게 기본 정보'),
+                const SizedBox(height: 12),
+                const _TextFieldBox(
+                  label: '가게 이름',
+                  hint: '동네유 식당',
+                  icon: Icons.storefront_rounded,
+                ),
+                const SizedBox(height: 14),
+                const _TextFieldBox(
+                  label: '업종 카테고리',
+                  hint: '한식, 일식, 카페 등',
+                  icon: Icons.category_rounded,
+                ),
+                const SizedBox(height: 14),
+                const _TextFieldBox(
+                  label: '가게 주소',
+                  hint: '주소를 검색하세요',
+                  icon: Icons.location_on_outlined,
+                  trailing: Icons.search_rounded,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '정확한 위치는 추천 품질과 길찾기에 사용됩니다.',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 26),
+                const _SectionHeader(title: '대표 메뉴'),
+                const SizedBox(height: 12),
+                const _MenuInputRow(),
+                const SizedBox(height: 12),
+                _PrimaryButton(
+                  label: '메뉴 추가하기',
+                  outline: true,
+                  icon: Icons.add_rounded,
+                  onPressed: () {},
+                ),
+                const SizedBox(height: 26),
+                const _SectionHeader(title: '가게 특징 (AI 홍보용)'),
+                const SizedBox(height: 8),
+                Text(
+                  'AI가 멋진 홍보 문구를 만들 수 있도록 우리 가게만의 매력을 알려주세요.',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: const [
+                    _Pill(label: '혼밥 환영', selected: true),
+                    _Pill(label: '가성비 최고'),
+                    _Pill(label: '분위기 맛집'),
+                    _Pill(label: '주차 가능'),
+                    _Pill(label: '반려동물 동반'),
+                    _Pill(label: '착한가격업소'),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const _TextFieldBox(
+                  label: '추가 설명',
+                  hint: '우리 가게만의 특별함을 적어주세요',
+                  icon: Icons.edit_note_rounded,
+                ),
+              ],
+            ),
+          ),
+          _BottomActionBar(
+            child: _PrimaryButton(
+              label: '다음 단계',
+              onPressed: () => onOpen(AppScreen.promotion),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuInputRow extends StatelessWidget {
+  const _MenuInputRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          const _IconTile(icon: Icons.restaurant_menu_rounded),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '대표 메뉴명',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: _accentText),
+            ),
+          ),
+          SizedBox(
+            width: 92,
+            child: Text(
+              '가격',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: _accentText),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AiPromotionHelperScreen extends StatelessWidget {
+  const AiPromotionHelperScreen({super.key, required this.onOpen});
+
+  final ValueChanged<AppScreen> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return _PhoneFrame(
+      child: Column(
+        children: [
+          _TopBar(
+            title: 'AI 홍보 도우미',
+            onBack: () => onOpen(AppScreen.ownerRegistration),
+            trailing: _IconButton(
+              icon: Icons.history_rounded,
+              onPressed: () {},
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [_secondary, _primary],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(32),
+                  ),
+                  child: Stack(
+                    children: [
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: _softCircle(
+                          86,
+                          Colors.white.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '우리 가게 홍보,\nAI에게 맡겨보세U!',
+                            style: theme.textTheme.headlineMedium?.copyWith(
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '메뉴 설명부터 SNS 문구까지\n클릭 한 번으로 완성됩니다.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.82),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const _SectionHeader(title: '필요한 홍보물을 선택해U'),
+                const SizedBox(height: 12),
+                const _FeatureCard(
+                  icon: Icons.campaign_rounded,
+                  title: 'SNS 홍보 문구',
+                  subtitle: '인스타그램, 당근마켓용 감성 문구',
+                  status: '최근 생성: 2일 전',
+                  action: '작성하기',
+                ),
+                const SizedBox(height: 12),
+                const _FeatureCard(
+                  icon: Icons.description_rounded,
+                  title: '메뉴/가게 소개',
+                  subtitle: '손님들의 침샘을 자극하는 설명글',
+                  status: '미작성',
+                  action: '생성하기',
+                ),
+                const SizedBox(height: 12),
+                const _FeatureCard(
+                  icon: Icons.local_offer_rounded,
+                  title: '타임딜 쿠폰',
+                  subtitle: '조용한 시간대 손님 모시는 문구',
+                  status: '최근 생성: 1시간 전',
+                  action: '만들기',
+                ),
+                const SizedBox(height: 24),
+                const _SurfaceCard(
+                  color: _surface,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SectionHeader(title: '홍보 정보 입력'),
+                      SizedBox(height: 16),
+                      _TextFieldBox(
+                        label: '홍보할 메뉴/이벤트',
+                        hint: '예: 신메뉴 들기름 막국수 출시',
+                        icon: Icons.restaurant_menu_rounded,
+                      ),
+                      SizedBox(height: 16),
+                      _TextFieldBox(
+                        label: '강조하고 싶은 키워드',
+                        hint: '예: 고소함, 로컬 식재료, 할머니 손맛',
+                        icon: Icons.sell_rounded,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const _SectionHeader(title: '문구 분위기'),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: const [
+                    _Pill(label: '친절한', selected: true),
+                    _Pill(label: '재치있는'),
+                    _Pill(label: '감성적인'),
+                    _Pill(label: '짧고 강한'),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                _PrimaryButton(
+                  label: '문구 생성하기',
+                  icon: Icons.auto_awesome_rounded,
+                  onPressed: () {},
+                ),
+                const SizedBox(height: 16),
+                _SurfaceCard(
+                  color: _surfaceVariant.withValues(alpha: 0.50),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.tips_and_updates_rounded,
+                        color: _primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          '구체적인 메뉴명과 분위기를 넣으면 더 자연스러운 홍보 문구가 만들어져요.',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureCard extends StatelessWidget {
+  const _FeatureCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.status,
+    required this.action,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String status;
+  final String action;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          _IconTile(icon: icon),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 6),
+                Text(
+                  status,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelSmall?.copyWith(color: _secondaryText),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            action,
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: _primary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BottomActionBar extends StatelessWidget {
+  const _BottomActionBar({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+      decoration: const BoxDecoration(
+        color: _surface,
+        border: Border(top: BorderSide(color: _alternate)),
+      ),
+      child: child,
+    );
+  }
 }
