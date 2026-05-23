@@ -22,8 +22,8 @@ def add_cors_headers(response):
 # [초기화 설정]
 # =====================================================================
 # ⭐️ 여기에 본인의 Supabase 프로젝트 URL과 API 키(anon public)를 입력하세요!
-SUPABASE_URL = "https://본인의-supabase-url.supabase.co"
-SUPABASE_KEY = "본인의-supabase-anon-key"
+SUPABASE_URL = "https://stbdmjcdivkhpqvfegwm.supabase.co"
+SUPABASE_KEY = "sb_publishable_Rq50iIhTcIqSufu0AN5EfQ_Nu1G4elc"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
