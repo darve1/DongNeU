@@ -308,3 +308,348 @@ AI 추천 이유 생성
 시간대: 저녁
 상황: 혼밥
 선호: 든든한 메뉴
+'''
+
+
+## 🛠 기술 스택 및 데이터베이스 설계
+
+---
+동네U는 하나의 코드베이스로 Android와 iOS에서 모두 동작할 수 있도록  
+**Flutter**를 기반으로 개발합니다.
+
+### 프론트엔드
+
+| 구분 | 사용 기술 |
+|---|---|
+| 앱 개발 | Flutter |
+| 개발 언어 | Dart |
+| 지원 환경 | Android, iOS |
+| UI 구성 | Flutter Widget 기반 |
+| 상태 관리 | Provider 또는 Riverpod |
+| 지도/위치 | 위치 권한, GPS 기반 위치 정보 활용 |
+| API 연동 | Supabase SDK, AI API 연동 |
+
+Flutter를 사용하면 Android와 iOS 앱을 따로 개발하지 않아도 되며,  
+동일한 기능과 화면을 두 플랫폼에서 빠르게 구현할 수 있습니다.
+
+### 백엔드 및 데이터베이스
+
+| 구분 | 사용 기술 |
+|---|---|
+| 백엔드 서비스 | Supabase |
+| 데이터베이스 | Supabase PostgreSQL |
+| 사용자 인증 | Supabase Auth |
+| 파일 저장 | Supabase Storage |
+| 서버 로직 | Supabase Edge Functions |
+| 실시간 기능 | Supabase Realtime |
+| 권한 관리 | Row Level Security |
+
+Supabase는 PostgreSQL 기반의 백엔드 서비스로,  
+사용자 정보, 가게 정보, 메뉴 정보, 추천 기록, 사장님 홍보 문구 등을 저장하는 데 사용합니다.
+
+---
+
+## 🗄 데이터베이스 구성 계획
+
+동네U의 데이터베이스는 크게 사용자, 가게, 메뉴, 추천, 홍보 기능을 중심으로 구성합니다.
+
+### 핵심 테이블 구조
+
+| 테이블명 | 설명 |
+|---|---|
+| users | 일반 사용자와 사장님 계정 정보 |
+| stores | 로컬 가게 기본 정보 |
+| store_menus | 가게별 메뉴 정보 |
+| store_tags | 가게 특징 태그 |
+| recommendations | 사용자 추천 요청 기록 |
+| recommendation_results | 추천 결과로 제공된 가게 목록 |
+| ai_promotions | AI가 생성한 홍보 문구 기록 |
+| public_data_sources | 공공데이터 출처 관리 |
+| reviews | 사용자 후기 또는 간단 평가 |
+| favorites | 사용자가 저장한 관심 가게 |
+
+---
+
+## 👤 users 테이블
+
+사용자와 사장님 계정을 관리하는 테이블입니다.
+
+| 컬럼명 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 사용자 고유 ID |
+| email | text | 이메일 |
+| nickname | text | 닉네임 |
+| role | text | user 또는 owner |
+| created_at | timestamp | 가입일 |
+| updated_at | timestamp | 수정일 |
+
+### role 구분
+
+| 값 | 의미 |
+|---|---|
+| user | 일반 사용자 |
+| owner | 가게 사장님 |
+
+---
+
+## 🏪 stores 테이블
+
+대전·충청권 로컬 가게 정보를 저장하는 핵심 테이블입니다.
+
+| 컬럼명 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 가게 고유 ID |
+| owner_id | uuid | 사장님 사용자 ID |
+| name | text | 가게명 |
+| category | text | 한식, 분식, 카페 등 업종 |
+| address | text | 주소 |
+| region | text | 대전, 충남, 충북 등 지역 |
+| latitude | double | 위도 |
+| longitude | double | 경도 |
+| phone | text | 전화번호 |
+| opening_hours | text | 운영 시간 |
+| description | text | 가게 소개 |
+| is_local | boolean | 로컬 가게 여부 |
+| is_good_price | boolean | 착한가격업소 여부 |
+| is_traditional_market | boolean | 전통시장 관련 여부 |
+| source_type | text | 직접 등록 또는 공공데이터 |
+| created_at | timestamp | 등록일 |
+| updated_at | timestamp | 수정일 |
+
+이 테이블은 공공데이터에서 가져온 가게 정보와  
+사장님이 직접 등록한 가게 정보를 함께 관리합니다.
+
+---
+
+## 🍽 store_menus 테이블
+
+가게별 대표 메뉴와 가격 정보를 저장합니다.
+
+| 컬럼명 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 메뉴 고유 ID |
+| store_id | uuid | 연결된 가게 ID |
+| name | text | 메뉴명 |
+| price | integer | 가격 |
+| description | text | 메뉴 설명 |
+| is_signature | boolean | 대표 메뉴 여부 |
+| created_at | timestamp | 등록일 |
+| updated_at | timestamp | 수정일 |
+
+추천 점수 계산 시 사용자의 예산과 메뉴 가격을 비교하는 데 활용합니다.
+
+---
+
+## 🏷 store_tags 테이블
+
+가게의 분위기나 특징을 태그 형태로 저장합니다.
+
+| 컬럼명 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 태그 고유 ID |
+| store_id | uuid | 연결된 가게 ID |
+| tag | text | 태그명 |
+
+### 태그 예시
+
+| 태그 | 의미 |
+|---|---|
+| 혼밥 | 혼자 먹기 좋은 곳 |
+| 가성비 | 가격 대비 만족도가 높은 곳 |
+| 든든한 메뉴 | 식사량이 충분한 곳 |
+| 조용한 곳 | 조용한 분위기 |
+| 데이트 | 데이트에 적합한 곳 |
+| 빠른 식사 | 짧은 시간 안에 먹기 좋은 곳 |
+| 따뜻한 국물 | 국물 메뉴가 있는 곳 |
+| 숨은 동네 가게 | 검색 노출이 적은 로컬 가게 |
+
+---
+
+## 🔍 recommendations 테이블
+
+사용자가 추천을 요청한 조건을 저장합니다.
+
+| 컬럼명 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 추천 요청 ID |
+| user_id | uuid | 사용자 ID |
+| search_type | text | AI 검색 또는 조건 선택 검색 |
+| input_text | text | 사용자가 입력한 자연어 |
+| location_text | text | 입력한 위치 |
+| budget | integer | 예산 |
+| time_slot | text | 아침, 점심, 저녁, 야식 |
+| situation | text | 혼밥, 친구, 데이트 등 |
+| preferred_category | text | 선호 음식 카테고리 |
+| mood | text | 원하는 분위기 |
+| created_at | timestamp | 추천 요청 시간 |
+
+사용자의 추천 요청을 저장하면  
+최근 추천 기록 확인 기능과 추천 품질 개선에 활용할 수 있습니다.
+
+---
+
+## 🃏 recommendation_results 테이블
+
+추천 요청에 대해 실제로 제공된 가게 3곳을 저장합니다.
+
+| 컬럼명 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 추천 결과 ID |
+| recommendation_id | uuid | 추천 요청 ID |
+| store_id | uuid | 추천된 가게 ID |
+| card_type | text | 가까워U, 아껴U, 새로워U, 살려U |
+| score | integer | 추천 점수 |
+| reason | text | AI가 생성한 추천 이유 |
+| rank | integer | 추천 순위 |
+| created_at | timestamp | 생성 시간 |
+
+### card_type 예시
+
+| 카드명 | 의미 |
+|---|---|
+| 가까워U | 현재 위치에서 가까운 가게 |
+| 아껴U | 예산에 맞는 가성비 가게 |
+| 새로워U | 잘 알려지지 않은 숨은 로컬 가게 |
+| 살려U | 한산한 시간대 방문을 유도하는 가게 |
+
+---
+
+## 🤖 ai_promotions 테이블
+
+사장님이 AI 홍보도우미를 통해 생성한 문구를 저장합니다.
+
+| 컬럼명 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 홍보 문구 ID |
+| owner_id | uuid | 사장님 ID |
+| store_id | uuid | 가게 ID |
+| menu_id | uuid | 관련 메뉴 ID |
+| promotion_type | text | 소개글, SNS 문구, 메뉴 설명, 해시태그, 타임딜 |
+| input_keywords | text | 사장님이 입력한 특징 |
+| generated_text | text | AI가 생성한 문구 |
+| created_at | timestamp | 생성 시간 |
+
+### promotion_type 예시
+
+| 값 | 의미 |
+|---|---|
+| store_intro | 가게 소개글 |
+| menu_description | 메뉴 설명 |
+| sns_post | SNS 홍보 문구 |
+| hashtags | 해시태그 |
+| time_deal | 한산한 시간대 타임딜 문구 |
+
+---
+
+## 📊 public_data_sources 테이블
+
+공공데이터 출처와 반영 여부를 관리합니다.
+
+| 컬럼명 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 데이터 출처 ID |
+| name | text | 데이터 이름 |
+| provider | text | 제공 기관 |
+| source_url | text | 출처 URL |
+| last_updated | timestamp | 마지막 업데이트 일자 |
+| description | text | 데이터 설명 |
+
+### 활용 데이터 예시
+
+| 데이터 | 활용 목적 |
+|---|---|
+| 소상공인 상가업소정보 | 로컬 가게 후보 DB 구성 |
+| 대전 음식점 정보 | 메뉴, 가격, 업종 정보 보강 |
+| 착한가격업소 현황 | 가성비 추천 카드 구성 |
+| 전통시장 데이터 | 로컬마켓 활성화 요소 반영 |
+| 인허가 현황 데이터 | 상권 분석 근거 활용 |
+
+---
+
+## ⭐ favorites 테이블
+
+사용자가 마음에 든 가게를 저장하는 테이블입니다.
+
+| 컬럼명 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 관심 가게 ID |
+| user_id | uuid | 사용자 ID |
+| store_id | uuid | 저장한 가게 ID |
+| created_at | timestamp | 저장 시간 |
+
+---
+
+## 💬 reviews 테이블
+
+사용자가 방문 후 간단한 평가를 남길 수 있도록 구성합니다.
+
+| 컬럼명 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 리뷰 ID |
+| user_id | uuid | 사용자 ID |
+| store_id | uuid | 가게 ID |
+| rating | integer | 평점 |
+| content | text | 후기 내용 |
+| created_at | timestamp | 작성 시간 |
+
+MVP 단계에서는 복잡한 리뷰 시스템보다  
+간단한 평점과 한 줄 후기를 우선 적용할 수 있습니다.
+
+---
+
+## 🔐 권한 관리 계획
+
+Supabase의 Row Level Security를 사용해 사용자 권한을 관리합니다.
+
+| 대상 | 권한 |
+|---|---|
+| 일반 사용자 | 가게 조회, 추천 요청, 즐겨찾기, 리뷰 작성 |
+| 사장님 | 본인 가게 등록 및 수정, 메뉴 관리, AI 홍보 문구 생성 |
+| 관리자 | 공공데이터 관리, 부적절한 정보 수정, 전체 데이터 관리 |
+
+### 기본 권한 원칙
+
+1. 모든 사용자는 가게 정보를 조회할 수 있습니다.
+2. 일반 사용자는 자신의 추천 기록과 즐겨찾기만 조회할 수 있습니다.
+3. 사장님은 본인이 등록한 가게와 메뉴만 수정할 수 있습니다.
+4. AI 홍보 문구는 생성한 사장님만 조회하고 관리할 수 있습니다.
+5. 공공데이터 기반 가게 정보는 관리자만 직접 수정할 수 있습니다.
+
+---
+
+## 🧮 추천 로직 구성
+
+동네U의 추천은 Supabase에 저장된 가게 정보와 메뉴 정보를 바탕으로  
+규칙 기반 점수를 계산해 상위 가게를 선정합니다.
+
+| 항목 | 점수 |
+|---|---:|
+| 거리 적합도 | 20점 |
+| 예산 적합도 | 20점 |
+| 상황 적합도 | 20점 |
+| 메뉴 선호도 | 15점 |
+| 로컬 가게 여부 | 15점 |
+| 착한가격업소 여부 | 10점 |
+
+총점이 높은 가게 중에서  
+사용자 상황에 맞는 추천 카드 3개를 생성합니다.
+
+---
+
+## 🔄 서비스 동작 흐름
+
+```text
+사용자 입력
+  ↓
+Flutter 앱에서 조건 수집
+  ↓
+Supabase에서 가게 후보 조회
+  ↓
+거리, 예산, 상황, 태그 기반 점수 계산
+  ↓
+상위 가게 3곳 선정
+  ↓
+AI가 추천 이유 생성
+  ↓
+추천 카드로 사용자에게 표시
+
