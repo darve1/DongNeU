@@ -7,6 +7,13 @@ from transformers import pipeline
 
 app = Flask(__name__)
 
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    return response
+
 # =====================================================================
 # [초기화 설정]
 # =====================================================================
@@ -39,8 +46,11 @@ def is_heuristic_injection(text):
 # =====================================================================
 # [API 엔드포인트]
 # =====================================================================
-@app.route('/api/ai', methods=['POST'])
+@app.route('/api/ai', methods=['POST', 'OPTIONS'])
 def process_ai_request():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
     data = request.json
     
     if not data or 'input' not in data:
