@@ -24,6 +24,7 @@ enum AppScreen {
   location,
   home,
   aiCondition,
+  aiChat,
   recommendations,
   filters,
   storeDetail,
@@ -121,6 +122,7 @@ class _AppRouter extends StatelessWidget {
       AppScreen.location => LocationSetupScreen(onOpen: onOpen, onLocationChange: onLocationChange),
       AppScreen.home => HomeScreen(onOpen: onOpen, myLocation: myLocation),
       AppScreen.aiCondition => AiConditionConfirmationScreen(onOpen: onOpen),
+      AppScreen.aiChat => AiChatScreen(onOpen: onOpen),
       AppScreen.recommendations => Top3RecommendationsScreen(onOpen: onOpen),
       AppScreen.filters => ManualSearchFiltersScreen(onOpen: onOpen, myLocation: myLocation),
       AppScreen.storeDetail => StoreDetailScreen(onOpen: onOpen),
@@ -415,7 +417,49 @@ class _BottomNav extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _NavItem(icon: Icons.home_rounded, label: '홈', selected: current == AppScreen.home, onTap: () => onOpen(AppScreen.home)),
-          _NavItem(icon: Icons.search_rounded, label: '검색', selected: current == AppScreen.filters, onTap: () => onOpen(AppScreen.filters)),
+          _NavItem(icon: Icons.search_rounded, label: '검색', selected: current == AppScreen.filters || current == AppScreen.aiChat, onTap: () {
+            showModalBottomSheet(
+              context: context,
+              backgroundColor: _surface,
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+              builder: (context) => SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('어떤 방식으로 검색할까요?', style: Theme.of(context).textTheme.titleLarge),
+                      const SizedBox(height: 24),
+                      _SurfaceCard(
+                        onTap: () { Navigator.pop(context); onOpen(AppScreen.aiChat); },
+                        child: Row(
+                          children: [
+                            const _IconTile(icon: Icons.auto_awesome_rounded),
+                            const SizedBox(width: 16),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('AI 맞춤 검색', style: Theme.of(context).textTheme.titleSmall), const SizedBox(height: 4), Text('상황을 말하면 딱 맞는 곳을 추천해줘요', style: Theme.of(context).textTheme.bodySmall)])),
+                            const Icon(Icons.chevron_right_rounded, color: _secondaryText)
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _SurfaceCard(
+                        onTap: () { Navigator.pop(context); onOpen(AppScreen.filters); },
+                        child: Row(
+                          children: [
+                            const _IconTile(icon: Icons.tune_rounded, background: Color(0x1A7A6F66), color: _secondaryText),
+                            const SizedBox(width: 16),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('수동 상세 검색', style: Theme.of(context).textTheme.titleSmall), const SizedBox(height: 4), Text('카테고리, 예산 등을 직접 설정해요', style: Theme.of(context).textTheme.bodySmall)])),
+                            const Icon(Icons.chevron_right_rounded, color: _secondaryText)
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
           _NavItem(icon: Icons.bookmark_rounded, label: '저장', selected: current == AppScreen.saved, onTap: () => onOpen(AppScreen.saved)),
           _NavItem(icon: Icons.person_rounded, label: '마이', selected: current == AppScreen.mypage, onTap: () => onOpen(AppScreen.mypage)),
         ],
@@ -637,7 +681,7 @@ class _LocationSetupScreenState extends State<LocationSetupScreen> {
                 const SizedBox(height: 24),
                 const _SectionHeader(title: '현재 설정된 위치'),
                 const SizedBox(height: 12),
-                _LocationItem(title: _selectedNeighborhood, subtitle: '현재 선택된 동네입니다', selected: true, onTap: () {}),
+                _LocationItem(title: _selectedNeighborhood, subtitle: '현재 선택된 동네입니다', selected: true, onTap: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('백엔드 연동 후 제공될 기능입니다 🚀'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1))); }),
                 const SizedBox(height: 20),
                 const _SectionHeader(title: '최근 검색한 위치'),
                 const SizedBox(height: 12),
@@ -709,7 +753,7 @@ class HomeScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                Padding(padding: const EdgeInsets.fromLTRB(24, 0, 24, 24), child: _AiHeroCard(onTap: () => onOpen(AppScreen.aiCondition))),
+                Padding(padding: const EdgeInsets.fromLTRB(24, 0, 24, 24), child: _AiHeroCard(onTap: () => onOpen(AppScreen.aiChat))),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 24),
                   child: Column(
@@ -717,7 +761,7 @@ class HomeScreen extends StatelessWidget {
                     children: [
                       Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: Text('이런 상황인가U?', style: theme.textTheme.titleMedium)),
                       const SizedBox(height: 16),
-                      SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 24), child: Row(children: [_SituationChip(icon: Icons.rice_bowl_rounded, label: '혼밥', onTap: () => onOpen(AppScreen.aiCondition)), _SituationChip(icon: Icons.favorite_rounded, label: '데이트', onTap: () => onOpen(AppScreen.aiCondition)), _SituationChip(icon: Icons.savings_rounded, label: '가성비', onTap: () => onOpen(AppScreen.aiCondition)), _SituationChip(icon: Icons.umbrella_rounded, label: '비 오는 날', onTap: () => onOpen(AppScreen.aiCondition)), _SituationChip(icon: Icons.groups_rounded, label: '모임', onTap: () => onOpen(AppScreen.aiCondition))])),
+                      SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 24), child: Row(children: [_SituationChip(icon: Icons.rice_bowl_rounded, label: '혼밥', onTap: () => onOpen(AppScreen.aiChat)), _SituationChip(icon: Icons.favorite_rounded, label: '데이트', onTap: () => onOpen(AppScreen.aiChat)), _SituationChip(icon: Icons.savings_rounded, label: '가성비', onTap: () => onOpen(AppScreen.aiChat)), _SituationChip(icon: Icons.umbrella_rounded, label: '비 오는 날', onTap: () => onOpen(AppScreen.aiChat)), _SituationChip(icon: Icons.groups_rounded, label: '모임', onTap: () => onOpen(AppScreen.aiChat))])),
                     ],
                   ),
                 ),
@@ -893,7 +937,7 @@ class Top3RecommendationsScreen extends StatelessWidget {
     return _PhoneFrame(
       child: Column(
         children: [
-          _TopBar(title: '동네U의 추천', subtitle: '오늘의 완벽한 3곳을 찾았어요!', onBack: () => onOpen(AppScreen.aiCondition), trailing: _IconButton(icon: Icons.refresh_rounded, onPressed: () {})),
+          _TopBar(title: '동네U의 추천', subtitle: '오늘의 완벽한 3곳을 찾았어요!', onBack: () => onOpen(AppScreen.aiCondition), trailing: _IconButton(icon: Icons.refresh_rounded, onPressed: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('백엔드 연동 후 제공될 기능입니다 🚀'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1))); })),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
@@ -986,6 +1030,7 @@ class ManualSearchFiltersScreen extends StatefulWidget {
 class _ManualSearchFiltersScreenState extends State<ManualSearchFiltersScreen> {
   int _selectedBudget = 1;
   int _selectedSituation = 0;
+  String _selectedCategory = '한식';
   bool _isGoodPrice = true;
   bool _isMarket = false;
   bool _isNew = false;
@@ -1026,7 +1071,19 @@ class _ManualSearchFiltersScreenState extends State<ManualSearchFiltersScreen> {
                 Wrap(spacing: 8, runSpacing: 8, children: ['혼밥', '데이트', '친구와', '가족모임', '빠른 식사'].asMap().entries.map((e) => _Pill(label: e.value, selected: _selectedSituation == e.key, onTap: () => setState(() => _selectedSituation = e.key))).toList()),
                 const SizedBox(height: 26),
                 const _SectionHeader(title: '카테고리'), const SizedBox(height: 12),
-                GridView.count(crossAxisCount: 4, mainAxisSpacing: 10, crossAxisSpacing: 10, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), children: const [_CategoryTile(icon: Icons.rice_bowl_rounded, label: '한식'), _CategoryTile(icon: Icons.ramen_dining_rounded, label: '일식/면'), _CategoryTile(icon: Icons.local_pizza_rounded, label: '양식'), _CategoryTile(icon: Icons.local_cafe_rounded, label: '카페')]),
+                GridView.count(
+                  crossAxisCount: 4, 
+                  mainAxisSpacing: 10, 
+                  crossAxisSpacing: 10, 
+                  shrinkWrap: true, 
+                  physics: const NeverScrollableScrollPhysics(), 
+                  children: [
+                    _CategoryTile(icon: Icons.rice_bowl_rounded, label: '한식', selected: _selectedCategory == '한식', onTap: () => setState(() => _selectedCategory = '한식')), 
+                    _CategoryTile(icon: Icons.ramen_dining_rounded, label: '일식/면', selected: _selectedCategory == '일식/면', onTap: () => setState(() => _selectedCategory = '일식/면')), 
+                    _CategoryTile(icon: Icons.local_pizza_rounded, label: '양식', selected: _selectedCategory == '양식', onTap: () => setState(() => _selectedCategory = '양식')), 
+                    _CategoryTile(icon: Icons.local_cafe_rounded, label: '카페', selected: _selectedCategory == '카페', onTap: () => setState(() => _selectedCategory = '카페'))
+                  ]
+                ),
                 const SizedBox(height: 26),
                 const _SectionHeader(title: '로컬 특별 조건'), const SizedBox(height: 12),
                 _CheckCard(title: '착한가격업소', subtitle: '행안부 지정 물가 안정 모범 업소', checked: _isGoodPrice, onTap: () => setState(() => _isGoodPrice = !_isGoodPrice)),
@@ -1035,7 +1092,10 @@ class _ManualSearchFiltersScreenState extends State<ManualSearchFiltersScreen> {
               ],
             ),
           ),
-          _BottomActionBar(child: Row(children: [_IconButton(icon: Icons.refresh_rounded, onPressed: () {}), const SizedBox(width: 12), Expanded(child: _PrimaryButton(label: '결과 보기', onPressed: () => widget.onOpen(AppScreen.recommendations)))]))
+          _BottomActionBar(child: Row(children: [_IconButton(icon: Icons.refresh_rounded, onPressed: () { 
+  setState(() { _selectedBudget = 1; _selectedSituation = 0; _selectedCategory = '한식'; _isGoodPrice = true; _isMarket = false; _isNew = false; }); 
+  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('필터가 초기화되었습니다.'), behavior: SnackBarBehavior.floating)); 
+}), const SizedBox(width: 12), Expanded(child: _PrimaryButton(label: '결과 보기', onPressed: () => widget.onOpen(AppScreen.recommendations)))]))
         ],
       ),
     );
@@ -1043,12 +1103,27 @@ class _ManualSearchFiltersScreenState extends State<ManualSearchFiltersScreen> {
 }
 
 class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({required this.icon, required this.label});
+  const _CategoryTile({required this.icon, required this.label, this.selected = false, this.onTap});
   final IconData icon;
   final String label;
+  final bool selected;
+  final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
-    return _SurfaceCard(padding: const EdgeInsets.all(8), radius: 16, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(icon, color: _primary, size: 24), const SizedBox(height: 8), Text(label, style: Theme.of(context).textTheme.labelMedium, textAlign: TextAlign.center)]));
+    return _SurfaceCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(8), 
+      radius: 16, 
+      color: selected ? _primary.withOpacity(0.10) : _surface,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center, 
+        children: [
+          Icon(icon, color: selected ? _primary : _secondaryText, size: 24), 
+          const SizedBox(height: 8), 
+          Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: selected ? _primaryText : _secondaryText), textAlign: TextAlign.center)
+        ]
+      )
+    );
   }
 }
 
@@ -1080,7 +1155,7 @@ class StoreDetailScreen extends StatelessWidget {
                 children: [
                   Container(height: 260, decoration: const BoxDecoration(gradient: LinearGradient(colors: [_tertiary, _primary], begin: Alignment.topLeft, end: Alignment.bottomRight)), child: const Center(child: Icon(Icons.ramen_dining_rounded, color: Colors.white, size: 92))),
                   Positioned(top: 16, left: 16, child: _CircleAction(icon: Icons.arrow_back_rounded, onTap: () => onOpen(AppScreen.recommendations))),
-                  Positioned(top: 16, right: 16, child: Row(children: [_CircleAction(icon: Icons.share_rounded, onTap: () {}), const SizedBox(width: 8), _CircleAction(icon: Icons.bookmark_border_rounded, onTap: () => onOpen(AppScreen.saved))])),
+                  Positioned(top: 16, right: 16, child: Row(children: [_CircleAction(icon: Icons.share_rounded, onTap: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('백엔드 연동 후 제공될 기능입니다 🚀'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1))); }), const SizedBox(width: 8), _CircleAction(icon: Icons.bookmark_border_rounded, onTap: () => onOpen(AppScreen.saved))])),
                   Positioned(left: 24, bottom: 22, child: const _SmallTag(label: '가까워U', color: _info)),
                 ],
               ),
@@ -1119,7 +1194,7 @@ class StoreDetailScreen extends StatelessWidget {
               ),
             ],
           ),
-          Align(alignment: Alignment.bottomCenter, child: _BottomActionBar(child: Row(children: [SizedBox(width: 76, child: Column(mainAxisSize: MainAxisSize.min, children: [IconButton(onPressed: () => onOpen(AppScreen.saved), icon: const Icon(Icons.bookmark_border_rounded)), Text('저장', style: theme.textTheme.labelSmall)])), const SizedBox(width: 12), Expanded(child: _PrimaryButton(label: '길찾기', icon: Icons.near_me_rounded, onPressed: () {}))])))
+          Align(alignment: Alignment.bottomCenter, child: _BottomActionBar(child: Row(children: [SizedBox(width: 76, child: Column(mainAxisSize: MainAxisSize.min, children: [IconButton(onPressed: () => onOpen(AppScreen.saved), icon: const Icon(Icons.bookmark_border_rounded)), Text('저장', style: theme.textTheme.labelSmall)])), const SizedBox(width: 12), Expanded(child: _PrimaryButton(label: '길찾기', icon: Icons.near_me_rounded, onPressed: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('백엔드 연동 후 제공될 기능입니다 🚀'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1))); }))])))
         ],
       ),
     );
@@ -1172,7 +1247,7 @@ class SavedHistoryScreen extends StatelessWidget {
             color: _surface,
             child: Column(
               children: [
-                Padding(padding: const EdgeInsets.fromLTRB(24, 16, 24, 16), child: Column(children: [Row(children: [Text('저장', style: theme.textTheme.headlineSmall), const Spacer(), IconButton(onPressed: () {}, icon: const Icon(Icons.settings_rounded))]), const SizedBox(height: 14), Row(children: [const Expanded(child: _Pill(label: '저장한 가게', selected: true)), const SizedBox(width: 8), const Expanded(child: _Pill(label: '추천 기록'))])])),
+                Padding(padding: const EdgeInsets.fromLTRB(24, 16, 24, 16), child: Column(children: [Row(children: [Text('저장', style: theme.textTheme.headlineSmall), const Spacer(), IconButton(onPressed: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('백엔드 연동 후 제공될 기능입니다 🚀'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1))); }, icon: const Icon(Icons.settings_rounded))]), const SizedBox(height: 14), Row(children: [const Expanded(child: _Pill(label: '저장한 가게', selected: true)), const SizedBox(width: 8), const Expanded(child: _Pill(label: '추천 기록'))])])),
                 const Divider(height: 1, color: _alternate),
               ],
             ),
@@ -1250,7 +1325,7 @@ class OwnerStoreRegistrationScreen extends StatelessWidget {
                 const SizedBox(height: 10), Text('정확한 위치는 추천 품질과 길찾기에 사용됩니다.', style: theme.textTheme.bodySmall),
                 const SizedBox(height: 26), const _SectionHeader(title: '대표 메뉴'), const SizedBox(height: 12),
                 const _MenuInputRow(), const SizedBox(height: 12),
-                _PrimaryButton(label: '메뉴 추가하기', outline: true, icon: Icons.add_rounded, onPressed: () {}),
+                _PrimaryButton(label: '메뉴 추가하기', outline: true, icon: Icons.add_rounded, onPressed: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('백엔드 연동 후 제공될 기능입니다 🚀'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1))); }),
                 const SizedBox(height: 26), const _SectionHeader(title: '가게 특징 (AI 홍보용)'), const SizedBox(height: 8),
                 Text('AI가 멋진 홍보 문구를 만들 수 있도록 우리 가게만의 매력을 알려주세요.', style: theme.textTheme.bodySmall),
                 const SizedBox(height: 12),
@@ -1283,7 +1358,7 @@ class AiPromotionHelperScreen extends StatelessWidget {
     return _PhoneFrame(
       child: Column(
         children: [
-          _TopBar(title: 'AI 홍보 도우미', onBack: () => onOpen(AppScreen.ownerRegistration), trailing: _IconButton(icon: Icons.history_rounded, onPressed: () {})),
+          _TopBar(title: 'AI 홍보 도우미', onBack: () => onOpen(AppScreen.ownerRegistration), trailing: _IconButton(icon: Icons.history_rounded, onPressed: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('백엔드 연동 후 제공될 기능입니다 🚀'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1))); })),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(24),
@@ -1313,7 +1388,7 @@ class AiPromotionHelperScreen extends StatelessWidget {
                 _SurfaceCard(color: _surface, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const _SectionHeader(title: '홍보 정보 입력'), const SizedBox(height: 16), const _TextFieldBox(label: '홍보할 메뉴/이벤트', hint: '예: 신메뉴 들기름 막국수 출시', icon: Icons.restaurant_menu_rounded), const SizedBox(height: 16), const _TextFieldBox(label: '강조하고 싶은 키워드', hint: '예: 고소함, 로컬 식재료, 할머니 손맛', icon: Icons.sell_rounded)])),
                 const SizedBox(height: 16), const _SectionHeader(title: '문구 분위기'), const SizedBox(height: 12),
                 Wrap(spacing: 8, runSpacing: 8, children: const [_Pill(label: '친절한', selected: true), _Pill(label: '재치있는'), _Pill(label: '감성적인'), _Pill(label: '짧고 강한')]),
-                const SizedBox(height: 18), _PrimaryButton(label: '문구 생성하기', icon: Icons.auto_awesome_rounded, onPressed: () {}),
+                const SizedBox(height: 18), _PrimaryButton(label: '문구 생성하기', icon: Icons.auto_awesome_rounded, onPressed: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('백엔드 연동 후 제공될 기능입니다 🚀'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1))); }),
                 const SizedBox(height: 16), _SurfaceCard(color: _surfaceVariant.withOpacity(0.50), child: Row(children: [const Icon(Icons.tips_and_updates_rounded, color: _primary), const SizedBox(width: 12), Expanded(child: Text('구체적인 메뉴명과 분위기를 넣으면 더 자연스러운 홍보 문구가 만들어져요.', style: theme.textTheme.bodySmall))])),
               ],
             ),
@@ -1356,7 +1431,7 @@ class MyPageScreen extends StatelessWidget {
                     Container(width: 64, height: 64, decoration: const BoxDecoration(color: _surfaceVariant, shape: BoxShape.circle), child: const Icon(Icons.person_rounded, color: _accentText, size: 40)),
                     const SizedBox(width: 16),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('동네 주민님', style: theme.textTheme.headlineSmall), const SizedBox(height: 4), Text('dongneu@example.com', style: theme.textTheme.bodySmall)])),
-                    _PrimaryButton(label: '수정', compact: true, outline: true, onPressed: () {}),
+                    _PrimaryButton(label: '수정', compact: true, outline: true, onPressed: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('백엔드 연동 후 제공될 기능입니다 🚀'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1))); }),
                   ],
                 ),
                 const SizedBox(height: 32),
@@ -1371,8 +1446,8 @@ class MyPageScreen extends StatelessWidget {
                 const _SectionHeader(title: '내 활동'),
                 const SizedBox(height: 12),
                 _MenuTile(icon: Icons.history_rounded, label: '추천 기록 확인', onTap: () => onOpen(AppScreen.saved)),
-                _MenuTile(icon: Icons.edit_note_rounded, label: '내가 쓴 리뷰 관리', onTap: () {}),
-                _MenuTile(icon: Icons.notifications_none_rounded, label: '알림 설정', onTap: () {}),
+                _MenuTile(icon: Icons.edit_note_rounded, label: '내가 쓴 리뷰 관리', onTap: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('백엔드 연동 후 제공될 기능입니다 🚀'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1))); }),
+                _MenuTile(icon: Icons.notifications_none_rounded, label: '알림 설정', onTap: () { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('백엔드 연동 후 제공될 기능입니다 🚀'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1))); }),
                 const SizedBox(height: 24),
                 const _SectionHeader(title: '사장님 서비스'),
                 const SizedBox(height: 12),
@@ -1433,5 +1508,139 @@ class _BottomActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(width: double.infinity, padding: const EdgeInsets.fromLTRB(24, 16, 24, 16), decoration: const BoxDecoration(color: _surface, border: Border(top: BorderSide(color: _alternate))), child: child);
+  }
+}
+
+
+class AiChatScreen extends StatefulWidget {
+  const AiChatScreen({super.key, required this.onOpen});
+  final ValueChanged<AppScreen> onOpen;
+  @override
+  State<AiChatScreen> createState() => _AiChatScreenState();
+}
+
+class _AiChatScreenState extends State<AiChatScreen> {
+  final List<Map<String, dynamic>> _messages = [
+    {'isAi': true, 'text': '안녕하세요! 동네U AI입니다. 오늘 어떤 식사나 모임을 계획하고 계신가요? 상황, 예산, 취향을 편하게 말씀해주세요.'},
+  ];
+  final TextEditingController _controller = TextEditingController();
+
+  void _sendMessage() {
+    if (_controller.text.trim().isEmpty) return;
+    setState(() {
+      _messages.add({'isAi': false, 'text': _controller.text});
+      _controller.clear();
+    });
+    
+    // AI가 생각하는 척 딜레이를 줍니다
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) {
+        setState(() {
+          _messages.add({
+            'isAi': true, 
+            'text': '알겠습니다! 말씀해주신 조건에 맞춰 우리 동네 숨은 맛집을 분석했습니다. 아래 버튼을 눌러 추천 결과를 확인해보세요!',
+            'action': true
+          });
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _PhoneFrame(
+      child: Column(
+        children: [
+          _TopBar(title: 'AI 동네 검색', onBack: () => widget.onOpen(AppScreen.home)),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(24),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final msg = _messages[index];
+                final isAi = msg['isAi'] as bool;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: isAi ? MainAxisAlignment.start : MainAxisAlignment.end,
+                    children: [
+                      if (isAi) ...[
+                        const _IconTile(icon: Icons.auto_awesome_rounded, size: 40),
+                        const SizedBox(width: 12),
+                      ],
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: isAi ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: isAi ? _surface : _primary,
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(24),
+                                  topRight: const Radius.circular(24),
+                                  bottomLeft: Radius.circular(isAi ? 4 : 24),
+                                  bottomRight: Radius.circular(isAi ? 24 : 4),
+                                ),
+                                border: isAi ? Border.all(color: _alternate) : null,
+                              ),
+                              child: Text(
+                                msg['text'] as String,
+                                style: theme.textTheme.bodyMedium?.copyWith(color: isAi ? _primaryText : Colors.white, height: 1.5),
+                              ),
+                            ),
+                            if (msg['action'] == true) ...[
+                              const SizedBox(height: 12),
+                              _PrimaryButton(
+                                label: '추천 결과 보기',
+                                icon: Icons.list_alt_rounded,
+                                onPressed: () => widget.onOpen(AppScreen.recommendations),
+                              ),
+                            ]
+                          ],
+                        ),
+                      ),
+                      if (!isAi) const SizedBox(width: 52),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          _BottomActionBar(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(color: _surfaceVariant, borderRadius: BorderRadius.circular(24)),
+                    child: TextField(
+                      controller: _controller,
+                      decoration: const InputDecoration(
+                        hintText: '예: 비 오는 날 어울리는 파전 맛집',
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                InkWell(
+                  onTap: _sendMessage,
+                  borderRadius: BorderRadius.circular(24),
+                  child: Container(
+                    width: 52, height: 52,
+                    decoration: const BoxDecoration(color: _primary, shape: BoxShape.circle),
+                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
