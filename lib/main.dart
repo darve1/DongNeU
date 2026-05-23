@@ -1,12 +1,49 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 const _isSupabaseConfigured =
     _supabaseUrl.length > 10 && _supabaseAnonKey.length > 10;
+const _flaskAiBaseUrl = String.fromEnvironment(
+  'FLASK_AI_BASE_URL',
+  defaultValue: 'http://127.0.0.1:5000',
+);
 const _customerRole = 'customer';
 const _ownerRole = 'owner';
+
+class AiRecommendation {
+  const AiRecommendation({
+    required this.cardType,
+    required this.storeName,
+    required this.reason,
+  });
+
+  final String cardType;
+  final String storeName;
+  final String reason;
+
+  factory AiRecommendation.fromJson(Map<String, dynamic> json) {
+    return AiRecommendation(
+      cardType: (json['card_type'] as String?)?.trim().isNotEmpty == true
+          ? (json['card_type'] as String).trim()
+          : '추천U',
+      storeName: (json['store_name'] as String?)?.trim().isNotEmpty == true
+          ? (json['store_name'] as String).trim()
+          : '이름 없는 가게',
+      reason: (json['reason'] as String?)?.trim().isNotEmpty == true
+          ? (json['reason'] as String).trim()
+          : '입력한 조건과 잘 맞는 가게예요.',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'card_type': cardType, 'store_name': storeName, 'reason': reason};
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,6 +94,7 @@ class _DongNeuAppState extends State<DongNeuApp> {
   AppScreen _screen = AppScreen.auth;
   String _myLocation = '충남대 궁동';
   String _aiQuery = '충남대 근처 가성비 혼밥 추천해줘';
+  List<AiRecommendation> _aiRecommendations = const [];
   Session? _session;
   String? _accountRole;
 
@@ -70,6 +108,112 @@ class _DongNeuAppState extends State<DongNeuApp> {
 
   void _setAiQuery(String query) {
     setState(() => _aiQuery = query);
+  }
+
+  List<String> _keywordsFromQuery(String query) {
+    const candidates = [
+      '혼밥',
+      '데이트',
+      '가성비',
+      '비 오는 날',
+      '비오는날',
+      '모임',
+      '조용한',
+      '든든한',
+      '카페',
+      '한식',
+      '분식',
+      '국수',
+    ];
+    return candidates.where((keyword) => query.contains(keyword)).toList();
+  }
+
+  Future<void> _saveRecommendationHistory({
+    required String query,
+    required Map<String, dynamic> response,
+    required List<AiRecommendation> recommendations,
+  }) async {
+    if (!_isSupabaseConfigured) return;
+    final session = Supabase.instance.client.auth.currentSession ?? _session;
+    if (session == null) return;
+
+    try {
+      await Supabase.instance.client.from('recommendation_history').insert({
+        'user_id': session.user.id,
+        'query': query,
+        'location_text': _myLocation,
+        'keywords': _keywordsFromQuery(query),
+        'ai_response': {
+          'flask_response': response,
+          'recommendations': recommendations
+              .map((item) => item.toJson())
+              .toList(),
+        },
+      });
+    } catch (error) {
+      debugPrint('Failed to save recommendation history: $error');
+    }
+  }
+
+  Future<List<AiRecommendation>> _requestAiRecommendations(String query) async {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) {
+      throw Exception('검색 조건을 입력해주세요.');
+    }
+
+    final uri = Uri.parse('$_flaskAiBaseUrl/api/ai');
+    final response = await http
+        .post(
+          uri,
+          headers: const {'Content-Type': 'application/json'},
+          body: jsonEncode({'input': trimmedQuery, 'role': 'user'}),
+        )
+        .timeout(const Duration(seconds: 35));
+
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('AI 서버 응답 형식이 올바르지 않습니다.');
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(decoded['message'] as String? ?? 'AI 서버 요청에 실패했습니다.');
+    }
+    if (decoded['status'] != 'success') {
+      throw Exception(decoded['message'] as String? ?? 'AI 추천에 실패했습니다.');
+    }
+
+    final data = decoded['data'];
+    final rawRecommendations = data is Map<String, dynamic>
+        ? data['recommendations']
+        : null;
+    if (rawRecommendations is! List || rawRecommendations.isEmpty) {
+      throw Exception('추천 결과가 비어 있습니다.');
+    }
+
+    final recommendations = rawRecommendations
+        .whereType<Map>()
+        .map(
+          (item) => AiRecommendation.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .take(3)
+        .toList(growable: false);
+
+    if (recommendations.isEmpty) {
+      throw Exception('추천 결과를 해석하지 못했습니다.');
+    }
+
+    await _saveRecommendationHistory(
+      query: trimmedQuery,
+      response: decoded,
+      recommendations: recommendations,
+    );
+
+    if (mounted) {
+      setState(() {
+        _aiQuery = trimmedQuery;
+        _aiRecommendations = recommendations;
+      });
+    }
+    return recommendations;
   }
 
   AppScreen _screenForRole(String role) {
@@ -168,6 +312,8 @@ class _DongNeuAppState extends State<DongNeuApp> {
         onLocationChange: _setMyLocation,
         aiQuery: _aiQuery,
         onAiQueryChange: _setAiQuery,
+        aiRecommendations: _aiRecommendations,
+        onAiRecommend: _requestAiRecommendations,
       ),
     );
   }
@@ -275,6 +421,8 @@ class _AppRouter extends StatelessWidget {
     required this.onLocationChange,
     required this.aiQuery,
     required this.onAiQueryChange,
+    required this.aiRecommendations,
+    required this.onAiRecommend,
   });
 
   final AppScreen screen;
@@ -288,6 +436,8 @@ class _AppRouter extends StatelessWidget {
   final ValueChanged<String> onLocationChange;
   final String aiQuery;
   final ValueChanged<String> onAiQueryChange;
+  final List<AiRecommendation> aiRecommendations;
+  final Future<List<AiRecommendation>> Function(String query) onAiRecommend;
 
   @override
   Widget build(BuildContext context) {
@@ -312,8 +462,13 @@ class _AppRouter extends StatelessWidget {
       AppScreen.aiChat => AiChatScreen(
         onOpen: onOpen,
         onQueryChange: onAiQueryChange,
+        onRecommend: onAiRecommend,
       ),
-      AppScreen.recommendations => Top3RecommendationsScreen(onOpen: onOpen),
+      AppScreen.recommendations => Top3RecommendationsScreen(
+        onOpen: onOpen,
+        query: aiQuery,
+        recommendations: aiRecommendations,
+      ),
       AppScreen.filters => ManualSearchFiltersScreen(
         onOpen: onOpen,
         myLocation: myLocation,
@@ -2231,8 +2386,30 @@ class _ConditionRow extends StatelessWidget {
 }
 
 class Top3RecommendationsScreen extends StatelessWidget {
-  const Top3RecommendationsScreen({super.key, required this.onOpen});
+  const Top3RecommendationsScreen({
+    super.key,
+    required this.onOpen,
+    required this.query,
+    required this.recommendations,
+  });
   final ValueChanged<AppScreen> onOpen;
+  final String query;
+  final List<AiRecommendation> recommendations;
+
+  Color _colorForTag(String tag) {
+    if (tag.contains('가까')) return _info;
+    if (tag.contains('아껴') || tag.contains('가격')) return _success;
+    if (tag.contains('새로')) return _warning;
+    return _primary;
+  }
+
+  IconData _iconForTag(String tag) {
+    if (tag.contains('가까')) return Icons.near_me_rounded;
+    if (tag.contains('아껴') || tag.contains('가격')) return Icons.savings_rounded;
+    if (tag.contains('새로')) return Icons.auto_awesome_rounded;
+    return Icons.restaurant_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     return _PhoneFrame(
@@ -2244,73 +2421,76 @@ class Top3RecommendationsScreen extends StatelessWidget {
             onBack: () => onOpen(AppScreen.aiCondition),
             trailing: _IconButton(
               icon: Icons.refresh_rounded,
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('백엔드 연동 후 제공될 기능입니다 🚀'),
-                    behavior: SnackBarBehavior.floating,
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-              },
+              onPressed: () => onOpen(AppScreen.aiChat),
             ),
           ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
               children: [
-                _SurfaceCard(
-                  color: _primary.withOpacity(0.08),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.auto_awesome_rounded, color: _primary),
-                      SizedBox(width: 12),
-                      Expanded(child: Text('충남대 근처, 1만원 이하 혼밥하기 좋은 곳들입니다.')),
-                    ],
+                if (recommendations.isEmpty) ...[
+                  _SurfaceCard(
+                    color: _surfaceVariant.withOpacity(0.55),
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: _primary,
+                          size: 34,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '아직 추천 결과가 없어요',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'AI 동네 검색에서 원하는 조건을 먼저 입력해주세요.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 16),
+                        _PrimaryButton(
+                          label: 'AI 검색하러 가기',
+                          compact: true,
+                          onPressed: () => onOpen(AppScreen.aiChat),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                _RecommendationCard(
-                  rank: 1,
-                  tag: '가까워U',
-                  name: '할머니 국수',
-                  rating: '4.8',
-                  price: '~8,000원',
-                  category: '한식/국수',
-                  distance: '도보 3분',
-                  reason: '현재 위치에서 가장 가깝고, 비 오는 날 따뜻한 멸치 육수가 일품이에요.',
-                  color: _info,
-                  icon: Icons.ramen_dining_rounded,
-                  onTap: () => onOpen(AppScreen.storeDetail),
-                ),
-                const SizedBox(height: 14),
-                _RecommendationCard(
-                  rank: 2,
-                  tag: '아껴U',
-                  name: '궁동 보리밥',
-                  rating: '4.5',
-                  price: '~7,000원',
-                  category: '한식/보리밥',
-                  distance: '도보 8분',
-                  reason: '착한가격업소로 선정된 곳이며 푸짐한 반찬을 즐길 수 있어 가성비가 좋아요.',
-                  color: _success,
-                  icon: Icons.eco_rounded,
-                  onTap: () => onOpen(AppScreen.storeDetail),
-                ),
-                const SizedBox(height: 14),
-                _RecommendationCard(
-                  rank: 3,
-                  tag: '새로워U',
-                  name: '숨은 식탁',
-                  rating: '4.9',
-                  price: '~9,500원',
-                  category: '퓨전 일식',
-                  distance: '도보 10분',
-                  reason: '최근 동네 주민 리뷰가 빠르게 늘고 있는 조용한 혼밥 맛집이에요.',
-                  color: _warning,
-                  icon: Icons.set_meal_rounded,
-                  onTap: () => onOpen(AppScreen.storeDetail),
-                ),
+                ] else ...[
+                  _SurfaceCard(
+                    color: _primary.withOpacity(0.08),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.auto_awesome_rounded, color: _primary),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text('“$query” 조건에 맞춰 찾은 추천입니다.')),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ...recommendations.asMap().entries.expand((entry) {
+                    final item = entry.value;
+                    final color = _colorForTag(item.cardType);
+                    return [
+                      _RecommendationCard(
+                        rank: entry.key + 1,
+                        tag: item.cardType,
+                        name: item.storeName,
+                        rating: '-',
+                        price: 'AI 추천',
+                        category: '동네 맛집',
+                        distance: '조건 기반',
+                        reason: item.reason,
+                        color: color,
+                        icon: _iconForTag(item.cardType),
+                        onTap: () => onOpen(AppScreen.storeDetail),
+                      ),
+                      const SizedBox(height: 14),
+                    ];
+                  }),
+                ],
                 const SizedBox(height: 24),
                 Text(
                   '추천 결과가 마음에 드셨나요?',
@@ -4007,9 +4187,11 @@ class AiChatScreen extends StatefulWidget {
     super.key,
     required this.onOpen,
     required this.onQueryChange,
+    required this.onRecommend,
   });
   final ValueChanged<AppScreen> onOpen;
   final ValueChanged<String> onQueryChange;
+  final Future<List<AiRecommendation>> Function(String query) onRecommend;
   @override
   State<AiChatScreen> createState() => _AiChatScreenState();
 }
@@ -4023,29 +4205,49 @@ class _AiChatScreenState extends State<AiChatScreen> {
     },
   ];
   final TextEditingController _controller = TextEditingController();
+  bool _isSending = false;
 
-  void _sendMessage() {
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendMessage() async {
+    if (_isSending) return;
     if (_controller.text.trim().isEmpty) return;
-    final userText = _controller.text;
+    final userText = _controller.text.trim();
     widget.onQueryChange(userText);
     setState(() {
       _messages.add({'isAi': false, 'text': userText});
+      _messages.add({'isAi': true, 'text': '조건을 분석하고 동네 맛집을 찾는 중이에요.'});
       _controller.clear();
+      _isSending = true;
     });
 
-    // AI가 생각하는 척 딜레이를 줍니다
-    Future.delayed(const Duration(milliseconds: 1200), () {
-      if (mounted) {
-        setState(() {
-          _messages.add({
-            'isAi': true,
-            'text':
-                '알겠습니다! 말씀해주신 조건에 맞춰 우리 동네 숨은 맛집을 분석했습니다. 아래 버튼을 눌러 추천 결과를 확인해보세요!',
-            'action': true,
-          });
+    try {
+      final recommendations = await widget.onRecommend(userText);
+      if (!mounted) return;
+      setState(() {
+        _messages.removeLast();
+        _messages.add({
+          'isAi': true,
+          'text': '${recommendations.length}곳을 찾았어요. 아래 버튼을 눌러 추천 결과를 확인해보세요.',
+          'action': true,
         });
-      }
-    });
+        _isSending = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _messages.removeLast();
+        _messages.add({
+          'isAi': true,
+          'text': 'AI 추천 요청에 실패했어요. Flask 서버가 켜져 있는지 확인한 뒤 다시 시도해주세요.\n$error',
+        });
+        _isSending = false;
+      });
+    }
   }
 
   @override
@@ -4149,13 +4351,14 @@ class _AiChatScreenState extends State<AiChatScreen> {
                           vertical: 16,
                         ),
                       ),
+                      enabled: !_isSending,
                       onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 InkWell(
-                  onTap: _sendMessage,
+                  onTap: _isSending ? null : _sendMessage,
                   borderRadius: BorderRadius.circular(24),
                   child: Container(
                     width: 52,
@@ -4164,11 +4367,19 @@ class _AiChatScreenState extends State<AiChatScreen> {
                       color: _primary,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.send_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
+                    child: _isSending
+                        ? const Padding(
+                            padding: EdgeInsets.all(15),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.send_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
                   ),
                 ),
               ],
