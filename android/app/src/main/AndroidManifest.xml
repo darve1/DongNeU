@@ -1,5 +1,4 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 1. 인터넷 및 위치 권한 추가 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -8,9 +7,6 @@
         android:label="dong_neu"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-        <meta-data
-            android:name="com.naver.maps.map.CLIENT_ID"
-            android:value="j13ue7xko4" />
 
         <activity
             android:name=".MainActivity"
@@ -51,4 +47,6 @@
             <data android:mimeType="text/plain"/>
         </intent>
     </queries>
+</manifest>
+
 </manifest>
