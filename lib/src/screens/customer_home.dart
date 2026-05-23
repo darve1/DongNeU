@@ -909,7 +909,7 @@ class Top3RecommendationsScreen extends StatelessWidget {
               ],
             ),
           ),
-          _BottomNav(current: AppScreen.home, onOpen: onOpen),
+          _BottomNav(current: AppScreen.recommendations, onOpen: onOpen),
         ],
       ),
     );

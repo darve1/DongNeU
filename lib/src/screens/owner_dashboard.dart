@@ -114,8 +114,9 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
                       icon: Icons.lock_outline_rounded,
                       title: '대시보드를 열 수 없어요',
                       message: _error!,
-                      actionLabel: '계정 유형 선택',
-                      onAction: () => widget.onOpen(AppScreen.userType),
+                      actionLabel: '가게 등록하기',
+                      onAction: () =>
+                          widget.onOpen(AppScreen.ownerRegistration),
                     )
                   else ...[
                     _SurfaceCard(

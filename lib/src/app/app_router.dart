@@ -4,6 +4,7 @@ class _AppRouter extends StatelessWidget {
   const _AppRouter({
     required this.screen,
     required this.onOpen,
+    required this.onOpenCustomerService,
     required this.onAuthenticated,
     required this.onRoleSelected,
     required this.onSignOut,
@@ -29,6 +30,7 @@ class _AppRouter extends StatelessWidget {
 
   final AppScreen screen;
   final ValueChanged<AppScreen> onOpen;
+  final VoidCallback onOpenCustomerService;
   final Future<void> Function() onAuthenticated;
   final Future<void> Function(String role) onRoleSelected;
   final Future<void> Function() onSignOut;
@@ -114,6 +116,7 @@ class _AppRouter extends StatelessWidget {
       AppScreen.ownerStoreManage => OwnerStoreManageScreen(onOpen: onOpen),
       AppScreen.ownerMyPage => OwnerMyPageScreen(
         onOpen: onOpen,
+        onOpenCustomerService: onOpenCustomerService,
         onSignOut: onSignOut,
         userEmail: userEmail,
       ),

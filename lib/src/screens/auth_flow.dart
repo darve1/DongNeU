@@ -171,7 +171,7 @@ class _AuthOnboardingScreenState extends State<AuthOnboardingScreen> {
         Align(
           alignment: Alignment.centerRight,
           child: Text(
-            '비밀번호 재설정은 다음 단계에서 연결 예정이에요',
+            '비밀번호 재설정은 아직 준비 중이에요',
             style: theme.textTheme.labelMedium?.copyWith(color: _secondaryText),
           ),
         ),
@@ -350,15 +350,6 @@ class _UserTypeSelectionScreenState extends State<UserTypeSelectionScreen> {
               outline: true,
               onTap: () => _saveRole(AppRoles.owner),
             ),
-            const SizedBox(height: 24),
-            Center(
-              child: TextButton(
-                onPressed: _isSaving
-                    ? null
-                    : () => widget.onOpen(AppScreen.ownerDashboard),
-                child: const Text('이미 가게를 등록했다면 대시보드로 이동'),
-              ),
-            ),
           ],
         ),
         if (_isSaving)
@@ -489,7 +480,7 @@ class _LocationSetupScreenState extends State<LocationSetupScreen> {
                               size: 48,
                             ),
                             const SizedBox(height: 8),
-                            const Text('네이버 지도가 준비 중입니다'),
+                            const Text('주변 동네를 선택해주세요'),
                           ],
                         ),
                       ),
@@ -573,7 +564,6 @@ class _LocationSetupScreenState extends State<LocationSetupScreen> {
               },
             ),
           ),
-          _OwnerBottomNav(current: AppScreen.promotion, onOpen: widget.onOpen),
         ],
       ),
     );

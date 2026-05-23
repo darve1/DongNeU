@@ -91,7 +91,7 @@ class _OwnerStoreManageScreenState extends State<OwnerStoreManageScreen> {
   void _showPendingMessage() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('수정 저장은 다음 단계에서 연결할 예정입니다.'),
+        content: Text(AppMessages.backendPending),
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 1),
       ),

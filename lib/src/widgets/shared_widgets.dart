@@ -338,11 +338,20 @@ class _Pill extends StatefulWidget {
 
 class _PillState extends State<_Pill> {
   late bool _isSelected;
+  bool _isHovered = false;
 
   @override
   void initState() {
     super.initState();
     _isSelected = widget.selected;
+  }
+
+  @override
+  void didUpdateWidget(covariant _Pill oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selected != widget.selected) {
+      _isSelected = widget.selected;
+    }
   }
 
   void _handleTap() {
@@ -358,34 +367,51 @@ class _PillState extends State<_Pill> {
   @override
   Widget build(BuildContext context) {
     const chipColor = _primary;
-    return InkWell(
-      onTap: _handleTap,
-      borderRadius: BorderRadius.circular(9999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-        decoration: BoxDecoration(
-          color: _isSelected ? chipColor.withOpacity(0.10) : _surface,
+    final isSelected = widget.onTap == null ? _isSelected : widget.selected;
+    final backgroundColor = isSelected
+        ? chipColor.withOpacity(_isHovered ? 0.16 : 0.10)
+        : (_isHovered ? chipColor.withOpacity(0.06) : _surface);
+    final borderColor = isSelected
+        ? chipColor
+        : (_isHovered ? chipColor.withOpacity(0.45) : _alternate);
+    final foregroundColor = isSelected ? chipColor : _primaryText;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _handleTap,
           borderRadius: BorderRadius.circular(9999),
-          border: Border.all(color: _isSelected ? chipColor : _alternate),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (widget.icon != null) ...[
-              Icon(
-                widget.icon,
-                size: 16,
-                color: _isSelected ? chipColor : _secondaryText,
-              ),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              widget.label,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: _isSelected ? chipColor : _primaryText,
-              ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(9999),
+              border: Border.all(color: borderColor),
             ),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.icon != null) ...[
+                  Icon(
+                    widget.icon,
+                    size: 16,
+                    color: isSelected ? chipColor : _secondaryText,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  widget.label,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(color: foregroundColor),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -441,7 +467,10 @@ class _BottomNav extends StatelessWidget {
             icon: Icons.search_rounded,
             label: '검색',
             selected:
-                current == AppScreen.filters || current == AppScreen.aiChat,
+                current == AppScreen.filters ||
+                current == AppScreen.aiChat ||
+                current == AppScreen.aiCondition ||
+                current == AppScreen.recommendations,
             onTap: () {
               showModalBottomSheet(
                 context: context,
@@ -585,6 +614,14 @@ class _OwnerBottomNav extends StatelessWidget {
             label: '현황',
             selected: current == AppScreen.ownerDashboard,
             onTap: () => onOpen(AppScreen.ownerDashboard),
+          ),
+          _NavItem(
+            icon: Icons.storefront_rounded,
+            label: '가게',
+            selected:
+                current == AppScreen.ownerStoreManage ||
+                current == AppScreen.ownerRegistration,
+            onTap: () => onOpen(AppScreen.ownerStoreManage),
           ),
           _NavItem(
             icon: Icons.auto_awesome_rounded,

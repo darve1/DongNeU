@@ -211,7 +211,7 @@ class _AiPromotionHelperScreenState extends State<AiPromotionHelperScreen> {
         children: [
           _TopBar(
             title: 'AI 홍보 도우미',
-            onBack: () => widget.onOpen(AppScreen.ownerRegistration),
+            onBack: () => widget.onOpen(AppScreen.ownerDashboard),
             trailing: _IconButton(
               icon: Icons.history_rounded,
               onPressed: _loadOwnerData,

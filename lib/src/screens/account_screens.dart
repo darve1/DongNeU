@@ -4,10 +4,12 @@ class OwnerMyPageScreen extends StatelessWidget {
   const OwnerMyPageScreen({
     super.key,
     required this.onOpen,
+    required this.onOpenCustomerService,
     required this.onSignOut,
     required this.userEmail,
   });
   final ValueChanged<AppScreen> onOpen;
+  final VoidCallback onOpenCustomerService;
   final Future<void> Function() onSignOut;
   final String? userEmail;
 
@@ -52,12 +54,17 @@ class OwnerMyPageScreen extends StatelessWidget {
                   onTap: () => onOpen(AppScreen.ownerStoreManage),
                 ),
                 _MenuTile(
+                  icon: Icons.home_rounded,
+                  label: '고객 서비스로 이동',
+                  onTap: onOpenCustomerService,
+                ),
+                _MenuTile(
                   icon: Icons.settings_rounded,
                   label: '설정',
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('설정 화면은 다음 단계에서 연결할 예정입니다.'),
+                        content: Text(AppMessages.backendPending),
                         behavior: SnackBarBehavior.floating,
                         duration: Duration(seconds: 1),
                       ),

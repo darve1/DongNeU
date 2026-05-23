@@ -270,7 +270,7 @@ class _OwnerStoreRegistrationScreenState
         children: [
           _TopBar(
             title: '우리 가게 등록하기',
-            onBack: () => widget.onOpen(AppScreen.userType),
+            onBack: () => widget.onOpen(AppScreen.ownerDashboard),
           ),
           Expanded(
             child: ListView(

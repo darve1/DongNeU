@@ -43,6 +43,11 @@ class _DongNeuAppState extends State<DongNeuApp> {
     setState(() => _screen = screen);
   }
 
+  void _openCustomerService() {
+    _open(AppScreen.home);
+    unawaited(_refreshCustomerData());
+  }
+
   void _setMyLocation(String loc) {
     setState(() => _myLocation = loc);
   }
@@ -424,6 +429,7 @@ class _DongNeuAppState extends State<DongNeuApp> {
       home: _AppRouter(
         screen: _screen,
         onOpen: _open,
+        onOpenCustomerService: _openCustomerService,
         onAuthenticated: _handleAuthenticated,
         onRoleSelected: _selectAccountRole,
         onSignOut: _signOut,
