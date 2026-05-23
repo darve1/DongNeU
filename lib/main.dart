@@ -44,6 +44,7 @@ class DongNeuApp extends StatefulWidget {
 class _DongNeuAppState extends State<DongNeuApp> {
   AppScreen _screen = AppScreen.auth;
   String _myLocation = '충남대 궁동';
+  String _aiQuery = '충남대 근처 가성비 혼밥 추천해줘';
 
   void _open(AppScreen screen) {
     setState(() => _screen = screen);
@@ -51,6 +52,10 @@ class _DongNeuAppState extends State<DongNeuApp> {
 
   void _setMyLocation(String loc) {
     setState(() => _myLocation = loc);
+  }
+
+  void _setAiQuery(String query) {
+    setState(() => _aiQuery = query);
   }
 
   @override
@@ -64,6 +69,8 @@ class _DongNeuAppState extends State<DongNeuApp> {
         onOpen: _open, 
         myLocation: _myLocation,
         onLocationChange: _setMyLocation,
+        aiQuery: _aiQuery,
+        onAiQueryChange: _setAiQuery,
       ),
     );
   }
@@ -107,12 +114,16 @@ class _AppRouter extends StatelessWidget {
     required this.onOpen, 
     required this.myLocation,
     required this.onLocationChange,
+    required this.aiQuery,
+    required this.onAiQueryChange,
   });
 
   final AppScreen screen;
   final ValueChanged<AppScreen> onOpen;
   final String myLocation;
   final ValueChanged<String> onLocationChange;
+  final String aiQuery;
+  final ValueChanged<String> onAiQueryChange;
 
   @override
   Widget build(BuildContext context) {
@@ -121,8 +132,8 @@ class _AppRouter extends StatelessWidget {
       AppScreen.userType => UserTypeSelectionScreen(onOpen: onOpen),
       AppScreen.location => LocationSetupScreen(onOpen: onOpen, onLocationChange: onLocationChange),
       AppScreen.home => HomeScreen(onOpen: onOpen, myLocation: myLocation),
-      AppScreen.aiCondition => AiConditionConfirmationScreen(onOpen: onOpen),
-      AppScreen.aiChat => AiChatScreen(onOpen: onOpen),
+      AppScreen.aiCondition => AiConditionConfirmationScreen(onOpen: onOpen, query: aiQuery),
+      AppScreen.aiChat => AiChatScreen(onOpen: onOpen, onQueryChange: onAiQueryChange),
       AppScreen.recommendations => Top3RecommendationsScreen(onOpen: onOpen),
       AppScreen.filters => ManualSearchFiltersScreen(onOpen: onOpen, myLocation: myLocation),
       AppScreen.storeDetail => StoreDetailScreen(onOpen: onOpen),
@@ -896,7 +907,7 @@ class AiConditionConfirmationScreen extends StatelessWidget {
               _SurfaceCard(
                 child: Column(
                   children: [
-                    Row(children: [Container(width: 54, height: 54, decoration: BoxDecoration(color: _primary.withOpacity(0.10), borderRadius: BorderRadius.circular(18)), child: const Icon(Icons.auto_awesome_rounded, color: _primary)), const SizedBox(width: 14), Expanded(child: Text('“충남대 근처에서 혼자 먹기 좋고 만 원 이하로 든든한 저녁 추천해줘”', style: theme.textTheme.titleSmall))]),
+                    Row(children: [Container(width: 54, height: 54, decoration: BoxDecoration(color: _primary.withOpacity(0.10), borderRadius: BorderRadius.circular(18)), child: const Icon(Icons.auto_awesome_rounded, color: _primary)), const SizedBox(width: 14), Expanded(child: Text('“$query”', style: theme.textTheme.titleSmall))]),
                     const SizedBox(height: 18), const Divider(color: _alternate), const SizedBox(height: 14),
                     const _ConditionRow(icon: Icons.location_on_rounded, label: '위치', value: '충남대 근처'),
                     const _ConditionRow(icon: Icons.payments_rounded, label: '예산', value: '만 원 이하'),
@@ -1513,8 +1524,9 @@ class _BottomActionBar extends StatelessWidget {
 
 
 class AiChatScreen extends StatefulWidget {
-  const AiChatScreen({super.key, required this.onOpen});
+  const AiChatScreen({super.key, required this.onOpen, required this.onQueryChange});
   final ValueChanged<AppScreen> onOpen;
+  final ValueChanged<String> onQueryChange;
   @override
   State<AiChatScreen> createState() => _AiChatScreenState();
 }
@@ -1527,8 +1539,10 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   void _sendMessage() {
     if (_controller.text.trim().isEmpty) return;
+    final userText = _controller.text;
+    widget.onQueryChange(userText);
     setState(() {
-      _messages.add({'isAi': false, 'text': _controller.text});
+      _messages.add({'isAi': false, 'text': userText});
       _controller.clear();
     });
     
@@ -1596,7 +1610,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                               _PrimaryButton(
                                 label: '추천 결과 보기',
                                 icon: Icons.list_alt_rounded,
-                                onPressed: () => widget.onOpen(AppScreen.recommendations),
+                                onPressed: () => widget.onOpen(AppScreen.aiCondition),
                               ),
                             ]
                           ],
