@@ -51,19 +51,11 @@ class _OwnerStoreRegistrationScreenState
   }
 
   Future<List<AddressSearchResult>> _searchKakaoAddress(String query) async {
-    if (AppConfig.kakaoRestApiKey.isEmpty) {
-      throw Exception('KAKAO_REST_API_KEY가 설정되지 않았어요.');
-    }
-
-    final uri = Uri.https('dapi.kakao.com', '/v2/local/search/address.json', {
-      'query': query,
-      'size': '10',
-    });
+    final uri = Uri.parse(
+      '${AppConfig.flaskAiBaseUrl}/api/address/search',
+    ).replace(queryParameters: {'query': query});
     final response = await http
-        .get(
-          uri,
-          headers: {'Authorization': 'KakaoAK $AppConfig.kakaoRestApiKey'},
-        )
+        .get(uri, headers: _jsonHeadersWithAuth())
         .timeout(const Duration(seconds: 12));
 
     final decoded = jsonDecode(utf8.decode(response.bodyBytes));
@@ -72,6 +64,9 @@ class _OwnerStoreRegistrationScreenState
     }
     if (decoded is! Map<String, dynamic>) {
       throw Exception('주소 검색 응답 형식이 올바르지 않아요.');
+    }
+    if (decoded['status'] != 'success') {
+      throw Exception(decoded['message'] as String? ?? '주소 검색에 실패했어요.');
     }
 
     final documents = decoded['documents'];

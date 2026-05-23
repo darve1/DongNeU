@@ -31,6 +31,12 @@ Supabase Dashboard의 SQL Editor에서 아래 순서대로 실행합니다.
 새 기록이 저장될 때마다 같은 사용자의 기록은 최신 100개 중 최근 90일 이내 기록만 남기고 정리됩니다.
 RLS 정책은 로그인한 사용자가 자신의 `user_id`로만 추천 기록을 insert할 수 있게 제한합니다.
 
+## 권한 보호 정책
+
+`profiles.role`은 사용자가 직접 `admin`으로 바꿀 수 없고, 손님(`customer`) 또는 사장님(`owner`)만 선택할 수 있습니다.
+가게와 메뉴 등록/수정/삭제, 홍보 문구 저장은 `profiles.role`이 `owner` 또는 `admin`인 사용자만 가능합니다.
+`promotion_history`도 사용자당 분당 20개까지만 insert를 허용하고, 최신 100개 중 최근 90일 이내 기록만 남깁니다.
+
 Flutter 앱은 `SUPABASE_URL`, `SUPABASE_ANON_KEY`를 `--dart-define`으로 받아 anon client로 접근합니다.
 Flask AI 서버는 현재 DB write를 하지 않고, Flutter 앱이 Flask 응답을 Supabase에 저장합니다.
 

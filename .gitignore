@@ -34,6 +34,8 @@ migrate_working_dir/
 /coverage/
 
 # Local backend secrets
+ai-server/.env
+ai-server/__pycache__/
 backend/flask_ai/.env
 backend/flask_ai/.venv/
 backend/flask_ai/__pycache__/

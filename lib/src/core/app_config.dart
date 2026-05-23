@@ -11,7 +11,6 @@ class AppConfig {
     'FLASK_AI_BASE_URL',
     defaultValue: 'http://127.0.0.1:5000',
   );
-  static const kakaoRestApiKey = String.fromEnvironment('KAKAO_REST_API_KEY');
   static const naverMapClientId = String.fromEnvironment(
     'NAVER_MAP_CLIENT_ID',
     defaultValue: 'j13ue7xko4',
@@ -70,4 +69,15 @@ class AppMessages {
   const AppMessages._();
 
   static const backendPending = '백엔드 연동 후 제공될 기능입니다 🚀';
+}
+
+Map<String, String> _jsonHeadersWithAuth() {
+  final headers = {'Content-Type': 'application/json'};
+  if (!AppConfig.isSupabaseConfigured) return headers;
+
+  final accessToken = Supabase.instance.client.auth.currentSession?.accessToken;
+  if (accessToken != null && accessToken.isNotEmpty) {
+    headers['Authorization'] = 'Bearer $accessToken';
+  }
+  return headers;
 }

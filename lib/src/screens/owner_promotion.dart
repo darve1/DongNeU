@@ -138,7 +138,7 @@ class _AiPromotionHelperScreenState extends State<AiPromotionHelperScreen> {
       final response = await http
           .post(
             Uri.parse('$AppConfig.flaskAiBaseUrl/api/ai'),
-            headers: const {'Content-Type': 'application/json'},
+            headers: _jsonHeadersWithAuth(),
             body: jsonEncode({'input': input, 'role': 'owner'}),
           )
           .timeout(const Duration(seconds: 35));
