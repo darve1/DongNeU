@@ -49,3 +49,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local environment files at any depth (including legacy flack_ai paths)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
